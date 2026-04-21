@@ -1,0 +1,114 @@
+{
+  "generated_at": "2026-04-20T21:01:49.636Z",
+  "simulation_date": "2024-08-15",
+  "task_count": 1000,
+  "modes": {
+    "mode1_baseline": {
+      "total_cost_usd": 30001.470053870024,
+      "total_carbon_kg": 101221.23595193602,
+      "total_energy_kwh": 343589.7770110003,
+      "tasks_scheduled": 1000,
+      "tasks_deferred": 0,
+      "tasks_dropped": 0,
+      "conflict_count": 0
+    },
+    "mode2_optimized": {
+      "total_cost_usd": 10059.987216604797,
+      "total_carbon_kg": 51714.69428721031,
+      "total_energy_kwh": 212029.3802266787,
+      "tasks_scheduled": 891,
+      "tasks_deferred": 326,
+      "tasks_dropped": 109,
+      "conflict_count": 203,
+      "vs_baseline": {
+        "cost_delta_usd": -19941.482837265226,
+        "cost_pct_change": "-66.5%",
+        "carbon_delta_kg": -49506.54166472571,
+        "carbon_pct_change": "-48.9%"
+      }
+    },
+    "mode3_solar": {
+      "total_cost_usd": 8258.236164600654,
+      "total_carbon_kg": 45481.87757361704,
+      "total_energy_kwh": 142888.89846705302,
+      "tasks_scheduled": 891,
+      "tasks_deferred": 326,
+      "tasks_dropped": 109,
+      "conflict_count": 203,
+      "solar_rankings": [
+        {
+          "dcId": "dc_hammond_il",
+          "dcName": "Hammond IL",
+          "annualCostDisplacementUsd": 1589339,
+          "annualCarbonDisplacementKg": 4599968,
+          "storageMultiplier": 1,
+          "investmentScore": 100,
+          "roofUtilizationPct": 100,
+          "paybackYearsEstimate": 4.7
+        },
+        {
+          "dcId": "dc_eagle_mountain_ut",
+          "dcName": "Eagle Mountain UT",
+          "annualCostDisplacementUsd": 1371785,
+          "annualCarbonDisplacementKg": 6683766,
+          "storageMultiplier": 1,
+          "investmentScore": 94,
+          "roofUtilizationPct": 100,
+          "paybackYearsEstimate": 5.1
+        },
+        {
+          "dcId": "dc_weehawken_nj",
+          "dcName": "Weehawken NJ",
+          "annualCostDisplacementUsd": 1093054,
+          "annualCarbonDisplacementKg": 2853410,
+          "storageMultiplier": 1,
+          "investmentScore": 68,
+          "roofUtilizationPct": 100,
+          "paybackYearsEstimate": 4.2
+        },
+        {
+          "dcId": "dc_plano_tx",
+          "dcName": "Plano TX",
+          "annualCostDisplacementUsd": 903640,
+          "annualCarbonDisplacementKg": 1663768,
+          "storageMultiplier": 1.02,
+          "investmentScore": 54,
+          "roofUtilizationPct": 100,
+          "paybackYearsEstimate": 3.1
+        },
+        {
+          "dcId": "dc_chester_va",
+          "dcName": "Chester VA",
+          "annualCostDisplacementUsd": 566617,
+          "annualCarbonDisplacementKg": 1801319,
+          "storageMultiplier": 1,
+          "investmentScore": 36,
+          "roofUtilizationPct": 100,
+          "paybackYearsEstimate": 4.6
+        },
+        {
+          "dcId": "dc_san_jose_ca",
+          "dcName": "San Jose CA",
+          "annualCostDisplacementUsd": 172973,
+          "annualCarbonDisplacementKg": 858339,
+          "storageMultiplier": 9.38,
+          "investmentScore": 30,
+          "roofUtilizationPct": 100,
+          "paybackYearsEstimate": 37.6
+        }
+      ],
+      "vs_baseline": {
+        "cost_delta_usd": -21743.23388926937,
+        "cost_pct_change": "-72.5%",
+        "carbon_delta_kg": -55739.358378318975,
+        "carbon_pct_change": "-55.1%"
+      },
+      "vs_mode2": {
+        "cost_delta_usd": -1801.7510520041433,
+        "cost_pct_change": "-17.9%",
+        "carbon_delta_kg": -6232.816713593267,
+        "carbon_pct_change": "-12.1%"
+      }
+    }
+  }
+}
