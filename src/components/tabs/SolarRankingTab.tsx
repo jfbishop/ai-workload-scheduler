@@ -320,7 +320,7 @@ function MethodologyNote() {
         Energy cost displacement = solar kWh/day × 365 × avg LMP during solar hours (9am–4pm).
         Carbon displacement = solar kWh/day × 365 × avg carbon intensity during solar hours.
         Storage multiplier = avg evening LMP ÷ avg solar LMP — higher ratio means stronger time-shifting value.
-        Demand response = battery (2× solar peak kW) must shed &gt;50% of estimated peak load across 4 events/year. DR payments: PJM $12,500/MW/event, CAISO $10,000, ERCOT $8,750, PacifiCorp $5,000.
+        Demand response = battery (2× solar peak kW) must shed greater than or equal to 50% of estimated peak load across 4 events/year. DR payments: PJM $12,500/MW/event, CAISO $10,000, ERCOT $8,750, PacifiCorp $5,000.
         Coincident peak = solar kW at system peak hour × grid capacity charge (PJM $150/kW-yr, CAISO $120, ERCOT $100, PacifiCorp $80).
         Solar: NSRDB insolation data, 20% panel efficiency, full roof utilization. Install cost: $1.00/W.
       </div>
