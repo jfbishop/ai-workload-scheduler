@@ -83,17 +83,30 @@ function HourlyBars({
   values,
   colorFn,
   height = 56,
+  globalMax,
+  unit,
 }: {
   values: number[]
   colorFn: (v: number, min: number, max: number) => string
   height?: number
+  globalMax?: number
+  unit?: string
 }) {
-  const min = Math.min(...values)
-  const max = Math.max(...values)
-  const range = Math.max(1, max - min)
+  const localMin = Math.min(...values)
+  const localMax = Math.max(...values)
+  const scaleMax = globalMax ?? localMax
+  const peakHour = values.indexOf(localMax)
 
   return (
-    <div>
+    <div style={{ position: 'relative' }}>
+      <div style={{
+        position: 'absolute', top: '-2px', right: 0,
+        fontSize: '9px', color: '#854F0B', fontWeight: 500,
+        background: '#FAEEDA', padding: '1px 5px',
+        borderRadius: '4px', zIndex: 1,
+      }}>
+        peak {peakHour}:00 — {localMax.toFixed(0)}{unit ? ' ' + unit : ''}
+      </div>
       <div style={{
         display: 'flex', alignItems: 'flex-end', gap: '2px',
         height: `${height}px`,
@@ -103,15 +116,15 @@ function HourlyBars({
         padding: '5px 5px 0',
       }}>
         {values.map((v, i) => {
-          const heightPct = ((v - min) / range) * 78 + 12
+          const heightPct = scaleMax > 0 ? Math.max(4, (v / scaleMax) * 90) : 4
           return (
             <div
               key={i}
-              title={`${i}:00 — ${v.toFixed(0)}`}
+              title={`${i}:00 — ${v.toFixed(0)}${unit ? ' ' + unit : ''}`}
               style={{
                 flex: 1,
                 height: `${heightPct}%`,
-                background: colorFn(v, min, max),
+                background: colorFn(v, localMin, localMax),
                 borderRadius: '1px 1px 0 0',
               }}
             />
@@ -120,22 +133,23 @@ function HourlyBars({
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '2px' }}>
         <span style={{ fontSize: '8px', color: '#bbb' }}>12a</span>
-        <span style={{ fontSize: '8px', color: '#bbb' }}>6a</span>
         <span style={{ fontSize: '8px', color: '#bbb' }}>12p</span>
-        <span style={{ fontSize: '8px', color: '#bbb' }}>6p</span>
         <span style={{ fontSize: '8px', color: '#bbb' }}>12a</span>
       </div>
     </div>
   )
 }
 
+
 // ── Grid summary card ─────────────────────────────────────────────────────────
 
 function GridSummaryCard({
-  grid, dcs,
+  grid, dcs, globalLmpMax, globalCarbonMax,
 }: {
   grid: GridProfile
   dcs: DataCenter[]
+  globalLmpMax: number
+  globalCarbonMax: number
 }) {
   const servedDCs  = dcs.filter(dc => dc.utility_id === grid.utility_id)
   const avgLMP     = avg(grid.lmp_usd_per_mwh)
@@ -176,36 +190,24 @@ function GridSummaryCard({
         ))}
       </div>
 
-      {/* LMP chart */}
+      {/* LMP chart — full width */}
       <div style={{ fontSize: '10px', color: '#666', marginBottom: '4px', fontWeight: 500 }}>
-        LMP $/MWh — hourly
+        LMP electricity price $/MWh
       </div>
-      <HourlyBars values={grid.lmp_usd_per_mwh} colorFn={lmpColor} height={52} />
-
-      {/* LMP annotation */}
+      <HourlyBars values={grid.lmp_usd_per_mwh} colorFn={lmpColor} height={56} globalMax={globalLmpMax} unit="$/MWh" />
       {annotation && (
-        <div style={{
-          fontSize: '10px', color: '#666',
-          marginTop: '5px', marginBottom: '10px',
-          lineHeight: 1.5,
-        }}>
+        <div style={{ fontSize: '10px', color: '#666', marginTop: '5px', marginBottom: '12px', lineHeight: 1.5 }}>
           {annotation.lmp}
         </div>
       )}
 
-      {/* Carbon chart */}
+      {/* Carbon chart — same full width, stacked below */}
       <div style={{ fontSize: '10px', color: '#666', marginBottom: '4px', fontWeight: 500 }}>
-        Carbon intensity gCO₂/kWh — hourly
+        Carbon intensity gCO₂/kWh
       </div>
-      <HourlyBars values={grid.carbon_g_co2_per_kwh} colorFn={carbonColor} height={52} />
-
-      {/* Carbon annotation */}
+      <HourlyBars values={grid.carbon_g_co2_per_kwh} colorFn={carbonColor} height={56} globalMax={globalCarbonMax} unit="gCO₂/kWh" />
       {annotation && (
-        <div style={{
-          fontSize: '10px', color: '#666',
-          marginTop: '5px',
-          lineHeight: 1.5,
-        }}>
+        <div style={{ fontSize: '10px', color: '#666', marginTop: '5px', lineHeight: 1.5 }}>
           {annotation.carbon}
         </div>
       )}
@@ -271,12 +273,22 @@ export default function GridDataTab() {
     .map(id => grids.find(g => g.utility_id === id))
     .filter(Boolean) as GridProfile[]
 
+  // Shared scale across all grids — makes bar heights visually comparable
+  const globalLmpMax    = Math.max(...grids.flatMap(g => g.lmp_usd_per_mwh))
+  const globalCarbonMax = Math.max(...grids.flatMap(g => g.carbon_g_co2_per_kwh))
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
       <Legend />
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
         {sorted.map(grid => (
-          <GridSummaryCard key={grid.utility_id} grid={grid} dcs={dcs} />
+          <GridSummaryCard
+            key={grid.utility_id}
+            grid={grid}
+            dcs={dcs}
+            globalLmpMax={globalLmpMax}
+            globalCarbonMax={globalCarbonMax}
+          />
         ))}
       </div>
     </div>

@@ -160,8 +160,14 @@ function scheduleMode1(
   const schedule: ScheduledTask[] = []
   const dropped: string[] = []
 
+  // Mode 1 has no backlog — it only processes tasks submitted on Aug 15.
+  // Backlog tasks are a product of intelligent scheduling (Modes 2/3) where
+  // the system defers work from prior days to optimal windows. A naive
+  // baseline scheduler has no such queue — it just runs what arrives.
+  const liveTasks = tasks.filter(t => !t.is_backlog)
+
   // Sort by submit time (process in arrival order)
-  const sorted = [...tasks].sort((a, b) => a.submit_minute_frac - b.submit_minute_frac +
+  const sorted = [...liveTasks].sort((a, b) => a.submit_minute_frac - b.submit_minute_frac +
     (a.submit_hour - b.submit_hour) * 60)
 
   for (const task of sorted) {
@@ -260,6 +266,41 @@ function scheduleOptimized(
 
     if (feasibleDcs.length === 0) {
       dropped.push(task.request_id)
+      continue
+    }
+
+    // Flex 1: hard real-time — bypass objective function entirely.
+    // Always route to the nearest DC with available capacity at submit hour.
+    // Latency is non-negotiable for live inference.
+    if (task.flex_type === 1) {
+      const byDistance = [...feasibleDcs].sort((a, b) =>
+        computeDistanceKm(task.origin_lat, task.origin_lon, a.lat, a.lon) -
+        computeDistanceKm(task.origin_lat, task.origin_lon, b.lat, b.lon)
+      )
+      const nearestDc = byDistance.find(dc =>
+        hasCapacity(cap, dc, submitHour, task.duration_hours, task.gpu_count)
+      )
+      if (!nearestDc) {
+        dropped.push(task.request_id)
+        continue
+      }
+      const grid = grids.get(nearestDc.utility_id)!
+      occupyCapacity(cap, nearestDc.id, submitHour, task.duration_hours, task.gpu_count)
+      const { placement } = { placement: {
+        itPowerKw:        task.power_draw_kw,
+        totalPowerKw:     task.power_draw_kw * nearestDc.hourly_pue[submitHour],
+        totalEnergyKwh:   task.energy_kwh * nearestDc.hourly_pue[submitHour],
+        netGridEnergyKwh: task.energy_kwh * nearestDc.hourly_pue[submitHour],
+        costUsd:          task.energy_kwh * nearestDc.hourly_pue[submitHour] * (grid.lmp_usd_per_mwh[submitHour] / 1000),
+        carbonKg:         task.energy_kwh * nearestDc.hourly_pue[submitHour] * grid.carbon_g_co2_per_kwh[submitHour] / 1000,
+        latencyMs:        computeDistanceKm(task.origin_lat, task.origin_lon, nearestDc.lat, nearestDc.lon) / 100 + 5,
+        distanceKm:       computeDistanceKm(task.origin_lat, task.origin_lon, nearestDc.lat, nearestDc.lon),
+        pue:              nearestDc.hourly_pue[submitHour],
+        lmpUsdPerMwh:     grid.lmp_usd_per_mwh[submitHour],
+        carbonGCo2PerKwh: grid.carbon_g_co2_per_kwh[submitHour],
+        solarOffsetKwh:   0,
+      }}
+      schedule.push(buildScheduledTask(task, nearestDc, submitHour, placement, mode, false, null))
       continue
     }
 

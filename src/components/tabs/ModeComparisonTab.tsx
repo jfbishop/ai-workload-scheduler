@@ -87,8 +87,13 @@ function SummaryTable() {
       m1: `${m1.total_tasks_deferred}`,
       m2: `${m2.total_tasks_deferred}`,
       m3: `${m3.total_tasks_deferred}`,
-      m2delta: pct(m1.total_tasks_deferred || 1, m2.total_tasks_deferred),
-      m3delta: pct(m1.total_tasks_deferred || 1, m3.total_tasks_deferred),
+      // Percentage change from zero is meaningless — show absolute delta instead
+      m2delta: m1.total_tasks_deferred === 0
+        ? `+${m2.total_tasks_deferred} tasks`
+        : pct(m1.total_tasks_deferred, m2.total_tasks_deferred),
+      m3delta: m1.total_tasks_deferred === 0
+        ? `+${m3.total_tasks_deferred} tasks`
+        : pct(m1.total_tasks_deferred, m3.total_tasks_deferred),
       good: 'context',
     },
     {

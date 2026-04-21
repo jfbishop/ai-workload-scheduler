@@ -77,11 +77,11 @@ function TasksPerDCChart() {
                 )}
                 {hTr > 0 && (
                   <div title={`Training: ${dc.training_jobs}`}
-                    style={{ width: '100%', height: `${hTr}px`, background: '#EF9F27' }} />
+                    style={{ width: '100%', height: `${hTr}px`, background: '#378ADD' }} />
                 )}
                 {hInf > 0 && (
                   <div title={`Inference: ${dc.inference_jobs}`}
-                    style={{ width: '100%', height: `${hInf}px`, background: '#E24B4A', borderRadius: hBg === 0 && hTr === 0 ? '2px 2px 0 0' : undefined }} />
+                    style={{ width: '100%', height: `${hInf}px`, background: '#7F77DD', borderRadius: hBg === 0 && hTr === 0 ? '2px 2px 0 0' : undefined }} />
                 )}
               </div>
               <div style={{ fontSize: '8px', color: '#888', marginTop: '4px', textAlign: 'center', lineHeight: 1.3 }}>
@@ -93,8 +93,8 @@ function TasksPerDCChart() {
       </div>
       <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
         {[
-          { color: '#E24B4A', label: 'Flex 1 — inference' },
-          { color: '#EF9F27', label: 'Flex 2 — training' },
+          { color: '#7F77DD', label: 'Flex 1 — inference' },
+          { color: '#378ADD', label: 'Flex 2 — training' },
           { color: '#1D9E75', label: 'Flex 3 — background' },
         ].map(({ color, label }) => (
           <div key={label} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', color: '#666' }}>

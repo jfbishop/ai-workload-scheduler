@@ -154,7 +154,7 @@ export default function Dashboard() {
             <span style={{ color: C.blue }}>· Aug 15</span>
           </div>
           <div style={{ fontSize: '11px', color: C.textSec, marginTop: '2px' }}>
-            Grid-aware task routing simulation · 1,000 tasks · 6 data centers
+            Grid-aware task routing simulation · 8,000 tasks · 6 data centers
           </div>
         </div>
 

@@ -60,6 +60,7 @@ export interface Task {
   memory_gb: number
   power_draw_kw: number
   energy_kwh: number
+  is_backlog?: boolean   // true = submitted Aug 14, carried over to Aug 15 queue
 }
 
 // ── Scheduled task (output of simulation engine) ──────────────────────────────
@@ -115,14 +116,19 @@ export interface DCHourlyGpuUsage {
 }
 
 export interface SolarInvestmentRanking {
-  dcId: string
-  dcName: string
-  annualCostDisplacementUsd: number
+  dcId:                       string
+  dcName:                     string
+  annualCostDisplacementUsd:  number
   annualCarbonDisplacementKg: number
-  storageMultiplier: number
-  investmentScore: number
-  roofUtilizationPct: number
-  paybackYearsEstimate: number
+  storageMultiplier:          number
+  drEligible:                 boolean
+  drAnnualValueUsd:           number
+  drShedPct:                  number
+  coincidentPeakSavingsUsd:   number
+  investmentScore:            number
+  roofUtilizationPct:         number
+  paybackYearsEstimate:       number
+  totalAnnualValueUsd:        number
 }
 
 export interface SimulationResult {

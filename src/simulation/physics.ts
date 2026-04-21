@@ -74,6 +74,7 @@ export interface Task {
   memory_gb: number
   power_draw_kw: number
   energy_kwh: number
+  is_backlog?: boolean
 }
 
 // ── GPU Power ─────────────────────────────────────────────────────────────────

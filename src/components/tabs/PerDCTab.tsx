@@ -239,8 +239,8 @@ function StackedBarChart({
             return (
               <g key={h}>
                 {bg  > 0 && <rect x={xc} y={yBg}  width={w} height={hBg}  fill="#1D9E75" rx={1} />}
-                {tr  > 0 && <rect x={xc} y={yTr}  width={w} height={hTr}  fill="#EF9F27" rx={1} />}
-                {inf > 0 && <rect x={xc} y={yInf} width={w} height={hInf} fill="#E24B4A" rx={1} />}
+                {tr  > 0 && <rect x={xc} y={yTr}  width={w} height={hTr}  fill="#378ADD" rx={1} />}
+                {inf > 0 && <rect x={xc} y={yInf} width={w} height={hInf} fill="#7F77DD" rx={1} />}
               </g>
             )
           })}
@@ -395,8 +395,8 @@ export default function PerDCTab() {
         />
         <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
           {[
-            { color: '#E24B4A', label: 'Flex 1 — inference' },
-            { color: '#EF9F27', label: 'Flex 2 — training/batch' },
+            { color: '#7F77DD', label: 'Flex 1 — inference' },
+            { color: '#378ADD', label: 'Flex 2 — training/batch' },
             { color: '#1D9E75', label: 'Flex 3 — background' },
           ].map(({ color, label }) => (
             <div key={label} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', color: '#666' }}>
@@ -407,23 +407,23 @@ export default function PerDCTab() {
         </div>
       </div>
 
-      {/* Grid reference sparklines */}
+      {/* Grid reference sparklines — stacked to align with charts above */}
       <div style={panelStyle}>
         <div style={hdStyle}>{grid.name} — grid reference</div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-          <GridSparkline
-            values={grid.lmp_usd_per_mwh}
-            label="LMP electricity price ($/MWh)"
-            unit="$/MWh"
-            colorLow="#1D9E75"
-            colorHigh="#E24B4A"
-          />
+        <GridSparkline
+          values={grid.lmp_usd_per_mwh}
+          label="LMP electricity price ($/MWh)"
+          unit="$/MWh"
+          colorLow="#1D9E75"
+          colorHigh="#E24B4A"
+        />
+        <div style={{ marginTop: '12px' }}>
           <GridSparkline
             values={grid.carbon_g_co2_per_kwh}
             label="Carbon intensity (gCO₂/kWh)"
             unit="gCO₂/kWh"
-            colorLow="#1D9E75"
-            colorHigh="#E24B4A"
+            colorLow="#5DCAA5"
+            colorHigh="#993C1D"
           />
         </div>
         <div style={{ fontSize: '10px', color: '#888', marginTop: '8px' }}>

@@ -162,45 +162,73 @@ function RankingCard({
         }} />
       </div>
 
-      {/* Metrics grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+      {/* Total value banner */}
+      <div style={{
+        background: '#f0f7ff', borderRadius: '7px', padding: '8px 12px',
+        marginBottom: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+      }}>
+        <div style={{ fontSize: '13px', fontWeight: 500, color: '#0C447C' }}>
+          Total annual value: {fmt$(ranking.totalAnnualValueUsd)}
+        </div>
+        {ranking.drEligible
+          ? <span style={{ fontSize: '10px', background: '#E1F5EE', color: '#085041', padding: '2px 8px', borderRadius: '5px', fontWeight: 500 }}>DR eligible</span>
+          : <span style={{ fontSize: '10px', background: '#f4f4f2', color: '#888', padding: '2px 8px', borderRadius: '5px' }}>DR not eligible ({ranking.drShedPct}% shed)</span>
+        }
+      </div>
+
+      {/* Metrics grid — 5 value streams */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '6px' }}>
         {[
           {
             val: fmt$(ranking.annualCostDisplacementUsd),
-            label: 'Annual cost displacement',
-            sub: 'grid energy offset by solar',
+            label: 'Energy cost offset',
+            sub: 'solar displaces grid',
+            color: '#185FA5',
           },
           {
             val: fmtCO2(ranking.annualCarbonDisplacementKg),
-            label: 'Annual carbon avoided',
+            label: 'Carbon avoided',
             sub: 'vs drawing from grid',
+            color: '#0F6E56',
           },
           {
-            val: ranking.storageMultiplier.toFixed(2) + '×',
+            val: ranking.storageMultiplier.toFixed(1) + '×',
             label: 'Storage multiplier',
-            sub: 'evening LMP / solar LMP ratio',
+            sub: 'evening / solar LMP',
+            color: ranking.storageMultiplier > 5 ? '#0C447C' : '#666',
+          },
+          {
+            val: ranking.drEligible ? fmt$(ranking.drAnnualValueUsd) : '—',
+            label: 'DR revenue',
+            sub: ranking.drEligible ? `${ranking.drShedPct}% shed · 4 events/yr` : 'below 50% shed threshold',
+            color: ranking.drEligible ? '#854F0B' : '#bbb',
+          },
+          {
+            val: fmt$(ranking.coincidentPeakSavingsUsd),
+            label: 'Coincident peak',
+            sub: 'capacity charge avoided',
+            color: '#534AB7',
           },
         ].map(m => (
           <div key={m.label} style={{
-            background: '#f9f9f8', borderRadius: '7px',
-            padding: '7px 9px',
+            background: '#f9f9f8', borderRadius: '7px', padding: '7px 9px',
           }}>
-            <div style={{ fontSize: '15px', fontWeight: 500, color: '#1a1a1a' }}>{m.val}</div>
+            <div style={{ fontSize: '13px', fontWeight: 500, color: m.color }}>{m.val}</div>
             <div style={{ fontSize: '10px', color: '#666', marginTop: '2px' }}>{m.label}</div>
             <div style={{ fontSize: '9px', color: '#999', marginTop: '1px' }}>{m.sub}</div>
           </div>
         ))}
       </div>
 
-      {/* Solar peak output */}
+      {/* Solar specs footer */}
       {dc && (
         <div style={{
-          marginTop: '10px', paddingTop: '8px',
+          marginTop: '8px', paddingTop: '8px',
           borderTop: '0.5px solid rgba(0,0,0,0.08)',
           display: 'flex', gap: '16px',
         }}>
           <div style={{ fontSize: '10px', color: '#666' }}>
-            <span style={{ color: '#999' }}>Peak solar output: </span>
+            <span style={{ color: '#999' }}>Solar peak: </span>
             {dc.solar_potential_kw_peak.toLocaleString('en-US', { maximumFractionDigits: 0 })} kW
           </div>
           <div style={{ fontSize: '10px', color: '#666' }}>
@@ -208,12 +236,8 @@ function RankingCard({
             {(dc.solar_potential_kw_peak * dc.insolation_peak_sun_hours / 1000).toFixed(0)} MWh/day
           </div>
           <div style={{ fontSize: '10px', color: '#666' }}>
-            <span style={{ color: '#999' }}>Storage value: </span>
-            {ranking.storageMultiplier > 1.5
-              ? 'High — large price spread'
-              : ranking.storageMultiplier > 1.2
-              ? 'Moderate'
-              : 'Lower — flatter price profile'}
+            <span style={{ color: '#999' }}>~{ranking.paybackYearsEstimate}yr payback </span>
+            with all value streams
           </div>
         </div>
       )}
@@ -292,13 +316,13 @@ function MethodologyNote() {
         Ranking methodology
       </div>
       <div style={{ fontSize: '10px', color: '#888', lineHeight: 1.6 }}>
-        Investment score = 0.50 × annual cost displacement + 0.35 × annual carbon displacement + 0.15 × storage multiplier bonus.
-        Annual cost displacement = solar kWh/day × 365 × avg LMP during solar hours (9am–4pm).
-        Annual carbon displacement = solar kWh/day × 365 × avg carbon intensity during solar hours.
-        Storage multiplier = avg evening LMP (6pm–9pm) ÷ avg solar-hour LMP — higher ratio means more value in time-shifting.
-        Solar potential based on NSRDB insolation data, 20% panel efficiency, full roof utilization.
-        Payback estimate assumes $1.00/W installed cost (utility-scale commercial).
-        All values are single-day simulation scaled to annual estimates.
+        Investment score = 0.40 × energy cost displacement + 0.25 × carbon displacement + 0.15 × storage multiplier + 0.12 × demand response revenue + 0.08 × coincident peak savings.
+        Energy cost displacement = solar kWh/day × 365 × avg LMP during solar hours (9am–4pm).
+        Carbon displacement = solar kWh/day × 365 × avg carbon intensity during solar hours.
+        Storage multiplier = avg evening LMP ÷ avg solar LMP — higher ratio means stronger time-shifting value.
+        Demand response = battery (2× solar peak kW) must shed &gt;50% of estimated peak load across 4 events/year. DR payments: PJM $12,500/MW/event, CAISO $10,000, ERCOT $8,750, PacifiCorp $5,000.
+        Coincident peak = solar kW at system peak hour × grid capacity charge (PJM $150/kW-yr, CAISO $120, ERCOT $100, PacifiCorp $80).
+        Solar: NSRDB insolation data, 20% panel efficiency, full roof utilization. Install cost: $1.00/W.
       </div>
     </div>
   )

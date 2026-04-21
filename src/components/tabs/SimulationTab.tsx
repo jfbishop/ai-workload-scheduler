@@ -6,9 +6,9 @@ import type { ScheduledTask, DataCenter } from '@/simulation/types'
 
 // ── Colour helpers ────────────────────────────────────────────────────────────
 
-const FLEX_COLORS = { 1: '#E24B4A', 2: '#EF9F27', 3: '#1D9E75' } as const
-const FLEX_BG     = { 1: '#FCEBEB', 2: '#FAEEDA', 3: '#EAF3DE' } as const
-const FLEX_TEXT   = { 1: '#A32D2D', 2: '#854F0B', 3: '#3B6D11' } as const
+const FLEX_COLORS = { 1: '#7F77DD', 2: '#378ADD', 3: '#1D9E75' } as const
+const FLEX_BG     = { 1: '#EEEDFE', 2: '#E6F1FB', 3: '#E1F5EE' } as const
+const FLEX_TEXT   = { 1: '#3C3489', 2: '#0C447C', 3: '#085041' } as const
 const FLEX_LABEL  = { 1: 'F1', 2: 'F2', 3: 'F3' } as const
 
 function fmt$(n: number) { return '$' + n.toLocaleString('en-US', { maximumFractionDigits: 0 }) }
@@ -195,12 +195,10 @@ function Ticker() {
 // Rough equirectangular projection for continental US
 // lat: 24–50, lon: -125 to -66
 // Coordinates calibrated from clicked pixel positions on Wikipedia lower-48 SVG
-// Fitted using 9 anchor cities: svg_x = 16.879*lon + 2109.2, svg_y = -22.745*lat + 1137.5
-// Mean fit error: ~31px (acceptable for dot placement on a map this size)
+// Manually tuned by user — do not overwrite without re-testing visually
 
 const MAP_W = 960, MAP_H = 593
 
-// DC positions in SVG coordinate space
 const DC_SVG_COORDS: Record<string, [number, number]> = {
   'dc_hammond_il':        [607.3, 235.8],
   'dc_plano_tx':          [477.1, 420.5],
@@ -210,7 +208,6 @@ const DC_SVG_COORDS: Record<string, [number, number]> = {
   'dc_san_jose_ca':       [46.9,  271.2],
 }
 
-// City positions in SVG coordinate space
 const CITY_SVG_COORDS: Record<string, [number, number]> = {
   'New York NY':       [844.1, 227.5],
   'San Francisco CA':  [43.0,  267.3],
@@ -235,7 +232,6 @@ const CITY_SVG_COORDS: Record<string, [number, number]> = {
   'Raleigh NC':        [781.9, 335.7],
 }
 
-// Fixed jitter per flex type so dots don't overlap
 const JITTER: Record<number, { dx: number; dy: number }> = {
   1: { dx: 0,   dy: 0  },
   2: { dx: 14,  dy: -9 },
@@ -246,8 +242,13 @@ function USMap() {
   const { results, activeMode, currentHour, dcs } = useSimulationStore()
   const result = results[activeMode]
 
+  // Use submit_minute_frac for smooth sub-hour accumulation.
+  // Backlog tasks (submit_hour=0) spread across 0.0-0.9 so they appear
+  // gradually in the first hour rather than all at once at midnight.
+  const currentFrac = currentHour  // integer hour = exact hour boundary
+
   const submittedTasks = result
-    ? result.schedule.filter(t => t.submit_hour <= currentHour)
+    ? result.schedule.filter(t => t.submit_minute_frac <= currentFrac)
     : []
 
   const cityData: Record<string, { counts: Record<number, number> }> = {}
@@ -259,7 +260,17 @@ function USMap() {
       (cityData[t.origin_city].counts[t.flex_type] || 0) + 1
   }
 
-  const maxCount = Math.max(1, ...Object.values(cityData).flatMap(c => Object.values(c.counts)))
+  // Scale dot size relative to the FINAL day total (not current running max).
+  // This means dots grow monotonically — they never shrink because the
+  // denominator (final total) stays fixed while the numerator only increases.
+  const finalCounts: Record<string, Record<number, number>> = {}
+  if (result) {
+    for (const t of result.schedule) {
+      if (!finalCounts[t.origin_city]) finalCounts[t.origin_city] = { 1: 0, 2: 0, 3: 0 }
+      finalCounts[t.origin_city][t.flex_type] = (finalCounts[t.origin_city][t.flex_type] || 0) + 1
+    }
+  }
+  const maxCount = Math.max(1, ...Object.values(finalCounts).flatMap(c => Object.values(c)))
 
   return (
     <div>
@@ -267,21 +278,17 @@ function USMap() {
         Dot color = flex type · Dot size = cumulative requests · ◆ = data center (hover for info)
       </div>
       <div style={{
-        borderRadius: '8px', 
+        borderRadius: '8px',
         border: '0.5px solid rgba(0,0,0,0.10)',
-        overflow: 'hidden', 
+        overflow: 'hidden',
         background: '#f8f8f6',
-        height: '320px', // Hard cap the height to keep it consistent
+        height: '320px',
         width: '100%',
-        position: 'relative'
+        position: 'relative',
       }}>
         <svg
           style={{ width: '100%', height: '100%', display: 'block' }}
-          /* ViewBox breakdown: 
-            [x-start] [y-start] [width] [height]
-            Lowering the height (the 4th number) "zooms" in.
-          */
-          viewBox="10 5 850 600" 
+          viewBox="10 5 850 600"
           preserveAspectRatio="xMidYMid meet"
         >
           <image href="/us.svg" x="0" y="0" width="960" height="593" />
@@ -292,7 +299,9 @@ function USMap() {
             return ([1, 2, 3] as const).map(flex => {
               const count = data.counts[flex] || 0
               if (count === 0) return null
-              const r = 6 + (count / maxCount) * 24
+              // r scales from near-zero at start to max at end of day.
+              // No fixed minimum so dots genuinely start tiny.
+              const r = 3 + (count / maxCount) * 26
               const { dx, dy } = JITTER[flex]
               return (
                 <circle
@@ -312,16 +321,50 @@ function USMap() {
             const [x, y] = coords
             const s = 10
             return (
-              <polygon
-                key={dc.id}
-                points={`${x},${y-s} ${x+s},${y} ${x},${y+s} ${x-s},${y}`}
-                fill="#333" stroke="white" strokeWidth={2}
-              >
-                <title>{`${dc.name} · ${dc.capacity_mw} MW · ${dc.grid_operator}`}</title>
-              </polygon>
+              <g key={dc.id}>
+                <polygon
+                  points={`${x},${y-s} ${x+s},${y} ${x},${y+s} ${x-s},${y}`}
+                  fill="#333" stroke="white" strokeWidth={2}
+                  style={{ cursor: 'pointer' }}
+                  onMouseEnter={e => {
+                    const tip = document.getElementById('dc-map-tooltip')
+                    if (!tip) return
+                    const svg = (e.target as SVGElement).closest('svg')!
+                    const rect = svg.getBoundingClientRect()
+                    const pt   = (svg as SVGSVGElement).createSVGPoint()
+                    pt.x = e.clientX; pt.y = e.clientY
+                    tip.style.display = 'block'
+                    tip.style.left = `${e.clientX - rect.left + 12}px`
+                    tip.style.top  = `${e.clientY - rect.top  - 36}px`
+                    tip.innerHTML = `<strong>${dc.name}</strong><br/>${dc.capacity_mw} MW · ${dc.gpu_count.toLocaleString()} GPUs<br/>${dc.grid_operator} · ${dc.grid_zone}`
+                  }}
+                  onMouseLeave={() => {
+                    const tip = document.getElementById('dc-map-tooltip')
+                    if (tip) tip.style.display = 'none'
+                  }}
+                />
+              </g>
             )
           })}
         </svg>
+
+        {/* DC hover tooltip */}
+        <div
+          id="dc-map-tooltip"
+          style={{
+            display: 'none',
+            position: 'absolute',
+            background: '#1a1a1a',
+            color: '#fff',
+            fontSize: '11px',
+            lineHeight: 1.5,
+            padding: '6px 10px',
+            borderRadius: '6px',
+            pointerEvents: 'none',
+            zIndex: 10,
+            whiteSpace: 'nowrap',
+          }}
+        />
       </div>
 
       <div style={{ display: 'flex', gap: '12px', marginTop: '6px', flexWrap: 'wrap' }}>
@@ -455,7 +498,7 @@ function GanttChart() {
           Conflict hour
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', color: '#666' }}>
-          <div style={{ width: '22px', height: '10px', borderRadius: '2px', background: 'linear-gradient(to right, #E24B4A22, #E24B4A)' }} />
+          <div style={{ width: '22px', height: '10px', borderRadius: '2px', background: 'linear-gradient(to right, #7F77DD22, #7F77DD)' }} />
           Opacity = utilization %
         </div>
       </div>
@@ -589,12 +632,12 @@ export default function SimulationTab() {
       <TimeControls />
 
       {/* ── Main grid: map + gantt | sidebar ────────────────────── */}
-        <div style={{ 
-          display: 'grid', 
-          gridTemplateColumns: '55% 1fr', 
-          gap: '10px',
-          alignItems: 'start' // Keeps columns from stretching vertically if content is short
-        }}>
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: '55% 1fr',
+        gap: '10px',
+        alignItems: 'start',
+      }}>
 
         {/* Left column */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>

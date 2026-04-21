@@ -13,14 +13,14 @@
   --ds-text-hint: #999999;
 
   /* Flex type colours */
-  --flex1-bg:     #FCEBEB;
-  --flex1-text:   #A32D2D;
-  --flex1-dot:    #E24B4A;
-  --flex2-bg:     #FAEEDA;
-  --flex2-text:   #854F0B;
-  --flex2-dot:    #EF9F27;
-  --flex3-bg:     #EAF3DE;
-  --flex3-text:   #3B6D11;
+  --flex1-bg:     #EEEDFE;
+  --flex1-text:   #3C3489;
+  --flex1-dot:    #7F77DD;
+  --flex2-bg:     #E6F1FB;
+  --flex2-text:   #0C447C;
+  --flex2-dot:    #378ADD;
+  --flex3-bg:     #E1F5EE;
+  --flex3-text:   #085041;
   --flex3-dot:    #1D9E75;
 
   /* Grid colours */

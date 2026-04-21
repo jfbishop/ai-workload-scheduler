@@ -17,7 +17,7 @@
  */
 
 import type { Task, DataCenter, GridProfile, TaskPlacementCost } from './physics'
-import { computeTaskPlacementCost, computeDistanceKm, computeLatencyMs } from './physics'
+import { computeTaskPlacementCost, computeDistanceKm, computeLatencyMs, computeSolarOutputKw } from './physics'
 
 // ── Objective Weights ─────────────────────────────────────────────────────────
 //
@@ -135,11 +135,15 @@ export function scoreTaskPlacement(
   const latencyScore  = normalizeLatency(placement.latencyMs)
   const deferralScore = computeDeferralPenalty(task, scheduledHour)
 
-  // Utilization penalty: ramps from 0 at 40% util to 0.5 at 100% util
-  // Kicks in earlier and harder than before to spread load across DCs
-  const utilPenalty = currentUtilPct > 40
-    ? ((currentUtilPct - 40) / 60) * 0.5
-    : 0
+  // Utilization penalty: steep curve that makes nearly-full DCs very unattractive.
+  // Ramps from 0 at 30% → 0.3 at 60% → 0.8 at 80% → 1.5 at 100%
+  // This ensures Flex 2/3 spills to other DCs before any single DC saturates.
+  // Note: Flex 1 never reaches this code (hard-routed in scheduler.ts).
+  let utilPenalty = 0
+  if (currentUtilPct > 30) {
+    const t = (currentUtilPct - 30) / 70  // 0 at 30%, 1 at 100%
+    utilPenalty = t * t * 1.5              // quadratic: gentle at first, steep near 100%
+  }
 
   const totalScore =
     W.cost     * costScore +
@@ -273,47 +277,55 @@ export function findBestPlacement(
   return bestPlacement
 }
 
+// ── Grid-specific DR and coincident peak parameters ─────────────────────────
+
+interface GridEconomics {
+  drPaymentPerMwEvent:     number
+  drEventsPerYear:         number
+  coincidentPeakPerKwYear: number
+  drWindowHours:           number[]
+  coincidentPeakHour:      number
+}
+
+const GRID_ECONOMICS: Record<string, GridEconomics> = {
+  pjm_comed:       { drPaymentPerMwEvent: 12500, drEventsPerYear: 4, coincidentPeakPerKwYear: 150, drWindowHours: [13,14,15], coincidentPeakHour: 14 },
+  pjm_dom:         { drPaymentPerMwEvent: 12500, drEventsPerYear: 4, coincidentPeakPerKwYear: 150, drWindowHours: [13,14,15], coincidentPeakHour: 14 },
+  pjm_pseg:        { drPaymentPerMwEvent: 12500, drEventsPerYear: 4, coincidentPeakPerKwYear: 150, drWindowHours: [13,14,15], coincidentPeakHour: 14 },
+  ercot_north:     { drPaymentPerMwEvent:  8750, drEventsPerYear: 4, coincidentPeakPerKwYear: 100, drWindowHours: [11,12,13], coincidentPeakHour: 12 },
+  pacificorp_pace: { drPaymentPerMwEvent:  5000, drEventsPerYear: 4, coincidentPeakPerKwYear:  80, drWindowHours: [13,14,15], coincidentPeakHour: 14 },
+  caiso_pge:       { drPaymentPerMwEvent: 10000, drEventsPerYear: 4, coincidentPeakPerKwYear: 120, drWindowHours: [20,21,22], coincidentPeakHour: 21 },
+}
+
 // ── Solar Investment Ranking (Mode 3) ─────────────────────────────────────────
 
 export interface SolarInvestmentScore {
-  dcId: string
-  dcName: string
-  annualCostDisplacementUsd: number   // value of solar-displaced grid energy at LMP
-  annualCarbonDisplacementKg: number  // carbon avoided by solar
-  storageMultiplier: number           // bonus if solar peak ≠ price peak (storage helps)
-  investmentScore: number             // composite rank score (higher = invest here first)
-  roofUtilizationPct: number          // how much roof is available (always 100% here)
-  paybackYearsEstimate: number        // rough estimate at $1/W installed
+  dcId:                       string
+  dcName:                     string
+  annualCostDisplacementUsd:  number
+  annualCarbonDisplacementKg: number
+  storageMultiplier:          number
+  drEligible:                 boolean
+  drAnnualValueUsd:           number
+  drShedPct:                  number
+  coincidentPeakSavingsUsd:   number
+  investmentScore:            number
+  roofUtilizationPct:         number
+  paybackYearsEstimate:       number
+  totalAnnualValueUsd:        number
 }
 
-/**
- * Rank data centers by solar + storage investment value.
- * Higher score = better ROI from solar/storage deployment.
- *
- * Methodology:
- *   1. Cost displacement = solar_kwh/day × avg_peak_lmp × 365
- *   2. Carbon displacement = solar_kwh/day × avg_peak_carbon × 365 / 1000
- *   3. Storage multiplier = ratio of evening LMP to midday LMP
- *      (high ratio → storage lets you shift cheap midday solar to expensive evening)
- *   4. Score = α×costDisplacement + β×carbonDisplacement + γ×storageMultiplier
- *
- * @param dcs    All data centers
- * @param grids  Map of utility_id → GridProfile
- * @returns      Ranked array, best investment first
- */
 export function rankSolarInvestments(
   dcs: DataCenter[],
   grids: Map<string, GridProfile>,
 ): SolarInvestmentScore[] {
-  const ALPHA = 0.50  // weight on cost displacement
-  const BETA  = 0.35  // weight on carbon displacement
-  const GAMMA = 0.15  // weight on storage multiplier
+  const ALPHA   = 0.40
+  const BETA    = 0.25
+  const GAMMA   = 0.15
+  const DELTA   = 0.12
+  const EPSILON = 0.08
 
-  // Solar production hours: 9am-4pm (peak generation window)
-  const SOLAR_HOURS = [9, 10, 11, 12, 13, 14, 15, 16]
-  // Evening peak hours (storage would shift to here)
+  const SOLAR_HOURS   = [9, 10, 11, 12, 13, 14, 15, 16]
   const EVENING_HOURS = [18, 19, 20, 21]
-  // Solar install cost assumption: $1.00/W (utility-scale commercial)
   const INSTALL_COST_PER_W = 1.00
 
   const results: SolarInvestmentScore[] = []
@@ -321,36 +333,55 @@ export function rankSolarInvestments(
   for (const dc of dcs) {
     const grid = grids.get(dc.utility_id)
     if (!grid) continue
+    const econ = GRID_ECONOMICS[dc.utility_id]
 
-    const avgSolarLmp = SOLAR_HOURS.reduce((s, h) => s + grid.lmp_usd_per_mwh[h], 0) / SOLAR_HOURS.length
+    // Core solar metrics
+    const avgSolarLmp    = SOLAR_HOURS.reduce((s, h) => s + grid.lmp_usd_per_mwh[h], 0) / SOLAR_HOURS.length
     const avgSolarCarbon = SOLAR_HOURS.reduce((s, h) => s + grid.carbon_g_co2_per_kwh[h], 0) / SOLAR_HOURS.length
-    const avgEveningLmp = EVENING_HOURS.reduce((s, h) => s + grid.lmp_usd_per_mwh[h], 0) / EVENING_HOURS.length
+    const avgEveningLmp  = EVENING_HOURS.reduce((s, h) => s + grid.lmp_usd_per_mwh[h], 0) / EVENING_HOURS.length
 
-    // kWh displaced per day → annual
-    const dailyKwh   = dc.solar_potential_kwh_per_day
-    const annualKwh  = dailyKwh * 365
+    const dailyKwh  = dc.solar_potential_kwh_per_day
+    const annualKwh = dailyKwh * 365
 
-    // Storage multiplier: evening LMP / solar LMP ratio
-    // High ratio = strong economic case for time-shifting solar to evening peak
-    // CAISO example: evening $138/MWh / midday $8/MWh = 17.25x (very high)
-    // PacifiCorp: evening $90/MWh / midday $60/MWh = 1.5x (low, flat profile)
-    // Cap at 20x to prevent extreme outliers from dominating the score
-    const rawStorageMult = avgEveningLmp / Math.max(1, avgSolarLmp)
+    const rawStorageMult  = avgEveningLmp / Math.max(1, avgSolarLmp)
     const storageMultiplier = Math.min(20.0, Math.max(1.0, rawStorageMult))
 
-    const annualCostDisplacementUsd   = annualKwh * (avgSolarLmp / 1000)
-    const annualCarbonDisplacementKg  = annualKwh * avgSolarCarbon / 1000
+    const annualCostDisplacementUsd  = annualKwh * (avgSolarLmp / 1000)
+    const annualCarbonDisplacementKg = annualKwh * avgSolarCarbon / 1000
 
-    // Normalize each component across the fleet for scoring
-    // (raw values used; caller normalizes across results)
+    // Demand response
+    // Battery (2× solar peak capacity) must shed >50% of peak window load to qualify
+    let drEligible = false, drAnnualValueUsd = 0, drShedPct = 0
+    if (econ) {
+      const estimatedLoadKw   = dc.capacity_mw * 1000 * 0.70 * 1.35
+      const batteryCapacityKw = dc.solar_potential_kw_peak * 2
+      drShedPct  = Math.min(100, (batteryCapacityKw / estimatedLoadKw) * 100)
+      drEligible = drShedPct >= 50
+      if (drEligible) {
+        const mwCommitted = batteryCapacityKw / 1000
+        drAnnualValueUsd  = econ.drPaymentPerMwEvent * mwCommitted * econ.drEventsPerYear
+      }
+    }
+
+    // Coincident peak capacity charge avoidance
+    // Solar output at the coincident peak hour reduces billable peak demand
+    let coincidentPeakSavingsUsd = 0
+    if (econ) {
+      const solarAtPeak = computeSolarOutputKw(dc, econ.coincidentPeakHour)
+      coincidentPeakSavingsUsd = solarAtPeak * econ.coincidentPeakPerKwYear
+    }
+
+    const totalAnnualValueUsd = annualCostDisplacementUsd + drAnnualValueUsd + coincidentPeakSavingsUsd
+
     const rawScore =
-      ALPHA * annualCostDisplacementUsd +
-      BETA  * annualCarbonDisplacementKg * 0.1 +  // scale carbon to similar magnitude
-      GAMMA * storageMultiplier * annualCostDisplacementUsd  // storage bonus
+      ALPHA   * annualCostDisplacementUsd +
+      BETA    * annualCarbonDisplacementKg * 0.1 +
+      GAMMA   * storageMultiplier * annualCostDisplacementUsd +
+      DELTA   * drAnnualValueUsd +
+      EPSILON * coincidentPeakSavingsUsd
 
-    // Payback: install cost / annual savings
-    const installCostUsd = dc.solar_potential_kw_peak * 1000 * INSTALL_COST_PER_W
-    const paybackYearsEstimate = installCostUsd / Math.max(1, annualCostDisplacementUsd)
+    const installCostUsd       = dc.solar_potential_kw_peak * 1000 * INSTALL_COST_PER_W
+    const paybackYearsEstimate = installCostUsd / Math.max(1, totalAnnualValueUsd)
 
     results.push({
       dcId:                       dc.id,
@@ -358,13 +389,17 @@ export function rankSolarInvestments(
       annualCostDisplacementUsd:  Math.round(annualCostDisplacementUsd),
       annualCarbonDisplacementKg: Math.round(annualCarbonDisplacementKg),
       storageMultiplier:          Math.round(storageMultiplier * 100) / 100,
+      drEligible,
+      drAnnualValueUsd:           Math.round(drAnnualValueUsd),
+      drShedPct:                  Math.round(drShedPct),
+      coincidentPeakSavingsUsd:   Math.round(coincidentPeakSavingsUsd),
       investmentScore:            rawScore,
       roofUtilizationPct:         100,
       paybackYearsEstimate:       Math.round(paybackYearsEstimate * 10) / 10,
+      totalAnnualValueUsd:        Math.round(totalAnnualValueUsd),
     })
   }
 
-  // Sort best investment first; normalize scores to [0, 100]
   results.sort((a, b) => b.investmentScore - a.investmentScore)
   const maxScore = results[0]?.investmentScore ?? 1
   results.forEach(r => {

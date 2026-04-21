@@ -19,6 +19,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import fs   from 'fs'
 import path from 'path'
 
+export const dynamic = 'force-dynamic'
+
 const ALLOWED_FILES: Record<string, string> = {
   data_centers:    'data/data_centers.json',
   grid:            'data/grid.json',
@@ -52,7 +54,7 @@ export async function GET(req: NextRequest) {
     const content = fs.readFileSync(filePath, 'utf-8')
     const data    = JSON.parse(content)
     return NextResponse.json(data, {
-      headers: { 'Cache-Control': 'public, max-age=3600' },
+      headers: { 'Cache-Control': 'no-store' },
     })
   } catch {
     return NextResponse.json({ error: 'Failed to parse data file' }, { status: 500 })
