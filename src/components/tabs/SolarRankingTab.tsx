@@ -20,8 +20,8 @@ import type { SolarInvestmentRanking } from '@/simulation/types'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function fmt$(n: number) {
-  return '$' + n.toLocaleString('en-US', { maximumFractionDigits: 0 })
+function fmt$(n: number | undefined) {
+  return '$' + (n ?? 0).toLocaleString('en-US', { maximumFractionDigits: 0 })
 }
 function fmtCO2(kg: number) {
   return kg >= 1000 ? (kg / 1000).toFixed(1) + ' t' : kg.toFixed(0) + ' kg'
@@ -74,7 +74,7 @@ function DeltaCards() {
     {
       val: fmt$(m3.total_cost_usd),
       label: 'Mode 3 total fleet cost',
-      sub: `vs $${m2.total_cost_usd.toLocaleString('en-US', { maximumFractionDigits: 0 })} Mode 2`,
+      sub: `vs $${(m2.total_cost_usd ?? 0).toLocaleString('en-US', { maximumFractionDigits: 0 })} Mode 2`,
       subColor: '#666',
     },
     {
@@ -134,7 +134,7 @@ function RankingCard({
           </div>
           {dc && (
             <div style={{ fontSize: '10px', color: '#888', marginTop: '3px' }}>
-              {dc.capacity_mw} MW · {dc.roof_sqft.toLocaleString()} sqft roof ·{' '}
+              {dc.capacity_mw} MW · {(dc.roof_sqft ?? 0).toLocaleString()} sqft roof ·{' '}
               {dc.insolation_peak_sun_hours} peak sun hrs/day
             </div>
           )}
@@ -229,7 +229,7 @@ function RankingCard({
         }}>
           <div style={{ fontSize: '10px', color: '#666' }}>
             <span style={{ color: '#999' }}>Solar peak: </span>
-            {dc.solar_potential_kw_peak.toLocaleString('en-US', { maximumFractionDigits: 0 })} kW
+            {(dc.solar_potential_kw_peak ?? 0).toLocaleString('en-US', { maximumFractionDigits: 0 })} kW
           </div>
           <div style={{ fontSize: '10px', color: '#666' }}>
             <span style={{ color: '#999' }}>Daily potential: </span>
