@@ -219,7 +219,7 @@ export const useSimulationStore = create<SimState>((set, get) => ({
   results:  {},
   modesRun: [],
 
-  activeMode: 2,
+  activeMode: 1,
   activeTab:  'simulation',
   activeDCId: 'dc_hammond_il',
 

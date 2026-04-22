@@ -9,6 +9,7 @@
 import { useSimulationStore } from '@/store/simulationStore'
 import type { DashTab, SimMode } from '@/simulation/types'
 
+import ExplainerPanel   from '@/components/dashboard/ExplainerPanel'
 import SimulationTab    from '@/components/tabs/SimulationTab'
 import PerDCTab         from '@/components/tabs/PerDCTab'
 import FleetSummaryTab  from '@/components/tabs/FleetSummaryTab'
@@ -120,7 +121,7 @@ function NavTab({
 // ── Main Dashboard ────────────────────────────────────────────────────────────
 
 export default function Dashboard() {
-  const { activeTab } = useSimulationStore()
+  const { activeTab, tasks, dcs } = useSimulationStore()
 
   return (
     <div
@@ -154,7 +155,7 @@ export default function Dashboard() {
             <span style={{ color: C.blue }}>· Aug 15</span>
           </div>
           <div style={{ fontSize: '11px', color: C.textSec, marginTop: '2px' }}>
-            Grid-aware task routing simulation · 8,000 tasks · 6 data centers
+            Grid-aware task routing simulation · {tasks.length > 0 ? tasks.length.toLocaleString() : '8,000'} tasks · {dcs.length > 0 ? dcs.length : 6} data centers
           </div>
         </div>
 
@@ -164,6 +165,9 @@ export default function Dashboard() {
           <ModePill mode={3} label="Mode 3: +solar/storage" />
         </div>
       </div>
+
+      {/* ── Explainer panel ─────────────────────────────────────── */}
+      <ExplainerPanel />
 
       {/* ── Nav tabs + content ──────────────────────────────────── */}
       <div

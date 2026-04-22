@@ -48,8 +48,8 @@ export default function Home() {
           if (result) loadResult(result)
         }
 
-        // Default to Mode 2
-        useSimulationStore.getState().setActiveMode(2)
+        // Default to Mode 1
+        useSimulationStore.getState().setActiveMode(1)
         setLoading(false)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Unknown error')
