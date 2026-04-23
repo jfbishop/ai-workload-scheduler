@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-21T20:11:02.203Z",
+  "generated_at": "2026-04-23T01:43:56.554Z",
   "simulation_date": "2024-08-15",
   "task_count": 9500,
   "modes": {
@@ -13,28 +13,28 @@
       "conflict_count": 0
     },
     "mode2_optimized": {
-      "total_cost_usd": 148274.84738858294,
-      "total_carbon_kg": 777035.6886235803,
-      "total_energy_kwh": 2559479.298664218,
-      "tasks_scheduled": 8192,
-      "tasks_deferred": 3520,
-      "tasks_dropped": 1308,
-      "conflict_count": 1965,
+      "total_cost_usd": 158015.9064926179,
+      "total_carbon_kg": 885512.1010265413,
+      "total_energy_kwh": 2818972.98874306,
+      "tasks_scheduled": 8000,
+      "tasks_deferred": 2828,
+      "tasks_dropped": 0,
+      "conflict_count": 1427,
       "vs_baseline": {
-        "cost_delta_usd": -135854.65251829888,
-        "cost_pct_change": "-47.8%",
-        "carbon_delta_kg": -132442.19231485855,
-        "carbon_pct_change": "-14.6%"
+        "cost_delta_usd": -126113.59341426392,
+        "cost_pct_change": "-44.4%",
+        "carbon_delta_kg": -23965.779911897494,
+        "carbon_pct_change": "-2.6%"
       }
     },
     "mode3_solar": {
-      "total_cost_usd": 108402.78963472573,
-      "total_carbon_kg": 616280.6632667029,
-      "total_energy_kwh": 1884056.9358775518,
-      "tasks_scheduled": 8192,
-      "tasks_deferred": 3520,
-      "tasks_dropped": 1308,
-      "conflict_count": 1965,
+      "total_cost_usd": 112988.45471550201,
+      "total_carbon_kg": 698916.5067822671,
+      "total_energy_kwh": 2038121.740210153,
+      "tasks_scheduled": 8000,
+      "tasks_deferred": 2828,
+      "tasks_dropped": 0,
+      "conflict_count": 1427,
       "solar_rankings": [
         {
           "dcId": "dc_hammond_il",
@@ -128,16 +128,16 @@
         }
       ],
       "vs_baseline": {
-        "cost_delta_usd": -175726.7102721561,
-        "cost_pct_change": "-61.8%",
-        "carbon_delta_kg": -293197.2176717359,
-        "carbon_pct_change": "-32.2%"
+        "cost_delta_usd": -171141.04519137982,
+        "cost_pct_change": "-60.2%",
+        "carbon_delta_kg": -210561.3741561717,
+        "carbon_pct_change": "-23.2%"
       },
       "vs_mode2": {
-        "cost_delta_usd": -39872.05775385721,
-        "cost_pct_change": "-26.9%",
-        "carbon_delta_kg": -160755.02535687736,
-        "carbon_pct_change": "-20.7%"
+        "cost_delta_usd": -45027.4517771159,
+        "cost_pct_change": "-28.5%",
+        "carbon_delta_kg": -186595.5942442742,
+        "carbon_pct_change": "-21.1%"
       }
     }
   }

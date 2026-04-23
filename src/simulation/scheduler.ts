@@ -117,7 +117,9 @@ export interface SimulationResult {
 function initCapacity(dcs: DataCenter[]): DCHourlyCapacity {
   const cap: DCHourlyCapacity = {}
   for (const dc of dcs) {
-    cap[dc.id] = new Array(24).fill(0)
+    // 48 hours: 0-23 = Aug 15, 24-47 = Aug 16 overnight
+    // Allows late-day tasks to schedule into the overnight window
+    cap[dc.id] = new Array(48).fill(0)
   }
   return cap
 }
@@ -130,7 +132,7 @@ function occupyCapacity(
   gpuCount: number,
 ): void {
   const hoursOccupied = Math.ceil(durationHours)
-  for (let h = scheduledHour; h < Math.min(24, scheduledHour + hoursOccupied); h++) {
+  for (let h = scheduledHour; h < Math.min(48, scheduledHour + hoursOccupied); h++) {
     cap[dcId][h] += gpuCount
   }
 }
@@ -143,7 +145,7 @@ function hasCapacity(
   gpuCount: number,
 ): boolean {
   const hoursOccupied = Math.ceil(durationHours)
-  for (let h = scheduledHour; h < Math.min(24, scheduledHour + hoursOccupied); h++) {
+  for (let h = scheduledHour; h < Math.min(48, scheduledHour + hoursOccupied); h++) {
     if ((cap[dc.id][h] ?? 0) + gpuCount > dc.gpu_count) return false
   }
   return true
@@ -241,8 +243,12 @@ function scheduleOptimized(
   const dropped: string[] = []
   const includeSolar = mode === 3
 
+  // Process live Aug 15 tasks only — no backlog.
+  // All three modes now compare apples-to-apples on the same 8,000 live tasks.
+  const liveTasks = tasks.filter(t => !t.is_backlog)
+
   // Process Flex 1 first (hard real-time), then Flex 2, then Flex 3
-  const byFlexThenTime = [...tasks].sort((a, b) => {
+  const byFlexThenTime = [...liveTasks].sort((a, b) => {
     if (a.flex_type !== b.flex_type) return a.flex_type - b.flex_type
     return (a.submit_hour + a.submit_minute_frac / 60) -
            (b.submit_hour + b.submit_minute_frac / 60)
@@ -251,10 +257,10 @@ function scheduleOptimized(
   for (const task of byFlexThenTime) {
     // Filter DCs to those with capacity in the task's feasible window
     const submitHour = Math.floor(task.submit_minute_frac)
-    // Cap Flex 3 at hour 22 to avoid piling all deferred background jobs
-    // into the final hour bucket, which causes the midnight spike on charts.
-    const deadlineCap = task.flex_type === 3 ? 22 : 23
-    const maxHour     = Math.min(deadlineCap, Math.floor(task.submit_minute_frac + task.deadline_hours))
+    // Allow tasks to schedule into Aug 16 overnight (hours 24-47).
+    // Previously capped at hour 22/23 which caused late-day tasks to be dropped
+    // even when overnight capacity was available.
+    const maxHour = Math.min(47, Math.floor(task.submit_minute_frac + task.deadline_hours))
 
     const feasibleDcs = dcs.filter(dc => {
       // At least one hour in the window has capacity
@@ -315,8 +321,30 @@ function scheduleOptimized(
 
     // Verify capacity still available at chosen hour (findBestPlacement doesn't mutate cap)
     if (!hasCapacity(cap, assignedDc, best.scheduledHour, task.duration_hours, task.gpu_count)) {
-      // Fallback: find nearest feasible DC at any hour
-      dropped.push(task.request_id)
+      // Re-run placement excluding the now-full DC+hour — rare race between scoring and assignment
+      const fallback = findBestPlacement(
+        task,
+        feasibleDcs.filter(dc => dc.id !== assignedDc.id ||
+          hasCapacity(cap, dc, best.scheduledHour, task.duration_hours, task.gpu_count)),
+        grids, includeSolar, cap
+      )
+      if (!fallback) { dropped.push(task.request_id); continue }
+      const fbDc = dcs.find(dc => dc.id === fallback.dcId)!
+      occupyCapacity(cap, fbDc.id, fallback.scheduledHour, task.duration_hours, task.gpu_count)
+      schedule.push(buildScheduledTask(task, fbDc, fallback.scheduledHour, {
+        itPowerKw: fallback.score.placement.itPowerKw,
+        totalPowerKw: fallback.score.placement.totalPowerKw,
+        totalEnergyKwh: fallback.score.placement.totalEnergyKwh,
+        netGridEnergyKwh: fallback.score.placement.netGridEnergyKwh,
+        costUsd: fallback.score.placement.costUsd,
+        carbonKg: fallback.score.placement.carbonKg,
+        latencyMs: fallback.score.placement.latencyMs,
+        distanceKm: fallback.score.placement.distanceKm,
+        pue: fallback.score.placement.pue,
+        lmpUsdPerMwh: fallback.score.placement.lmpUsdPerMwh,
+        carbonGCo2PerKwh: fallback.score.placement.carbonGCo2PerKwh,
+        solarOffsetKwh: fallback.score.placement.solarOffsetKwh,
+      }, mode, false, null, fallback.score))
       continue
     }
 

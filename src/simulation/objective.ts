@@ -38,7 +38,7 @@ export const WEIGHTS_FLEX23 = {
   cost:     0.55,   // cost primary
   carbon:   0.30,   // carbon secondary
   latency:  0.00,   // no latency penalty for deferrable tasks
-  deferral: 0.15,   // higher to respect deadlines
+  deferral: 0.15,   // deferral urgency
 } as const
 
 // Keep WEIGHTS as alias for Flex 2/3 (used in comments/docs)
@@ -87,12 +87,20 @@ function normalizeLatency(latencyMs: number): number {
  * @returns               Normalized urgency 0–1
  */
 export function computeDeferralPenalty(task: Task, scheduledHour: number): number {
-  const submitHour = task.submit_minute_frac
+  const submitHour    = task.submit_minute_frac
   const deferralHours = Math.max(0, scheduledHour - submitHour)
   const deadlineHours = task.deadline_hours
 
-  if (deadlineHours <= 0) return 1  // already past deadline
-  return Math.min(1, deferralHours / deadlineHours)
+  if (deadlineHours <= 0) return 1
+  const t = Math.min(1, deferralHours / deadlineHours)
+
+  // Convex curve: penalty is front-loaded so even 1-2hr deferrals cost meaningfully.
+  // This prevents the scheduler deferring everything to the cheapest window.
+  // t=0.1 (short defer) → 0.28 penalty   (was 0.10 linear)
+  // t=0.3 (moderate)    → 0.55 penalty   (was 0.30 linear)
+  // t=0.5 (half window) → 0.71 penalty   (was 0.50 linear)
+  // t=1.0 (at deadline) → 1.00 penalty   (same)
+  return Math.sqrt(t)
 }
 
 // ── Core Objective Score ──────────────────────────────────────────────────────
@@ -135,14 +143,14 @@ export function scoreTaskPlacement(
   const latencyScore  = normalizeLatency(placement.latencyMs)
   const deferralScore = computeDeferralPenalty(task, scheduledHour)
 
-  // Utilization penalty: steep curve that makes nearly-full DCs very unattractive.
-  // Ramps from 0 at 30% → 0.3 at 60% → 0.8 at 80% → 1.5 at 100%
-  // This ensures Flex 2/3 spills to other DCs before any single DC saturates.
+  // Utilization penalty: quadratic curve that discourages over-concentrating load.
+  // Kicks in at 40%, strong above 70%. This spreads load across DCs without
+  // forcing work onto expensive grids when cheaper ones still have headroom.
   // Note: Flex 1 never reaches this code (hard-routed in scheduler.ts).
   let utilPenalty = 0
-  if (currentUtilPct > 30) {
-    const t = (currentUtilPct - 30) / 70  // 0 at 30%, 1 at 100%
-    utilPenalty = t * t * 1.5              // quadratic: gentle at first, steep near 100%
+  if (currentUtilPct > 40) {
+    const t = (currentUtilPct - 40) / 60   // 0 at 40%, 1 at 100%
+    utilPenalty = t * t * 1.2
   }
 
   const totalScore =

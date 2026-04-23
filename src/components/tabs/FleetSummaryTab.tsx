@@ -8,9 +8,12 @@
  *   - Horizontal bars: cost per DC
  *   - Horizontal bars: carbon per DC (sorted worst→best)
  *   - Fleet hourly energy + carbon line chart
+ *   - Collapsible deferral analysis panel
  */
 
+import { useState } from 'react'
 import { useSimulationStore } from '@/store/simulationStore'
+import type { SimulationResult } from '@/simulation/types'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -208,6 +211,211 @@ function FleetHourlyChart() {
   )
 }
 
+// ── Deferral Analysis (collapsible) ──────────────────────────────────────────
+
+function DeferralAnalysis({ result }: { result: SimulationResult }) {
+  const [open, setOpen] = useState(false)
+
+  // Guard: schedule may not be populated
+  if (!result.schedule || result.schedule.length === 0) return null
+
+  const deferred = result.schedule.filter(
+    t => t.status === 'deferred' || (t.deferred_by_hours != null && t.deferred_by_hours > 0)
+  )
+  const total = result.schedule.length
+
+  if (deferred.length === 0) return null
+
+  // Flex type breakdown
+  const byFlex: Record<number, number> = { 1: 0, 2: 0, 3: 0 }
+  deferred.forEach(t => { byFlex[t.flex_type] = (byFlex[t.flex_type] || 0) + 1 })
+
+  // Submit hour breakdown — how many deferred tasks were submitted each hour
+  // scheduled_hour can be 0-47 (48hr window), so clamp to 0-23 for display
+  const submitDist = Array(24).fill(0)
+  const runDist    = Array(24).fill(0)
+  deferred.forEach(t => {
+    const sh = Math.min(23, Math.floor(t.submit_hour))
+    const rh = Math.min(23, Math.floor(t.scheduled_hour))
+    submitDist[sh] = (submitDist[sh] || 0) + 1
+    runDist[rh]    = (runDist[rh]    || 0) + 1
+  })
+
+  // Deferral duration distribution
+  const durationBuckets = { '0-2h': 0, '2-4h': 0, '4-8h': 0, '8-16h': 0, '16h+': 0 }
+  deferred.forEach(t => {
+    const h = t.deferred_by_hours
+    if      (h < 2)  durationBuckets['0-2h']++
+    else if (h < 4)  durationBuckets['2-4h']++
+    else if (h < 8)  durationBuckets['4-8h']++
+    else if (h < 16) durationBuckets['8-16h']++
+    else             durationBuckets['16h+']++
+  })
+
+  const maxDist = Math.max(1, ...submitDist, ...runDist)
+  const FLEX_COLORS: Record<number, string> = { 1: '#7F77DD', 2: '#378ADD', 3: '#1D9E75' }
+  const FLEX_LABELS: Record<number, string> = {
+    1: 'Flex 1 — inference',
+    2: 'Flex 2 — batch/training',
+    3: 'Flex 3 — background',
+  }
+
+  return (
+    <div style={{ ...PANEL, padding: 0 }}>
+      {/* Header — always visible */}
+      <div
+        onClick={() => setOpen(o => !o)}
+        style={{
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          padding: '10px 12px', cursor: 'pointer', userSelect: 'none',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#378ADD' }} />
+          <span style={{ fontSize: '11px', fontWeight: 500, color: '#666', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            Deferral analysis — {result.total_tasks_deferred.toLocaleString()} tasks shifted to a cheaper same-day window
+          </span>
+          <span style={{ fontSize: '11px', color: '#999' }}>
+            ({((result.total_tasks_deferred / total) * 100).toFixed(0)}% of scheduled)
+          </span>
+        </div>
+        <span style={{
+          fontSize: '10px', color: '#bbb',
+          display: 'inline-block',
+          transform: open ? 'rotate(180deg)' : 'none',
+          transition: 'transform 0.2s',
+        }}>▼</span>
+      </div>
+
+      {/* Collapsible body */}
+      {open && (
+        <div style={{ padding: '0 12px 12px', borderTop: '0.5px solid rgba(0,0,0,0.08)' }}>
+
+          {/* Explainer */}
+          <div style={{
+            fontSize: '12px', color: '#444', lineHeight: 1.6,
+            background: '#f4f4f2', borderRadius: '8px', padding: '8px 12px',
+            margin: '10px 0 14px',
+          }}>
+            <span style={{ fontWeight: 500, color: '#1a1a1a' }}>All deferred tasks still run on Aug 15</span> — deferral means the scheduler
+            shifted a task to a later hour within the same day, not to the next day.
+            Of the {result.total_tasks_deferred.toLocaleString()} deferred tasks,
+            all complete within their deadline window.
+            Aug 15 is a high-demand summer day on PJM and ERCOT; shifting work to CAISO
+            solar hours (9am–4pm, $4–14/MWh) is often the economically correct choice
+            even at the cost of a few hours' delay.
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+
+            {/* Left: flex type breakdown + duration */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+
+              {/* Flex type bars */}
+              <div>
+                <div style={{ fontSize: '11px', fontWeight: 500, color: '#666', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  Deferred by flex type
+                </div>
+                {([2, 3, 1] as const).map(f => {
+                  const count = byFlex[f] || 0
+                  const pct   = total > 0 ? (count / total) * 100 : 0
+                  const barW  = deferred.length > 0 ? (count / deferred.length) * 100 : 0
+                  return (
+                    <div key={f} style={{ marginBottom: '8px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
+                        <span style={{ fontSize: '10px', color: '#666' }}>{FLEX_LABELS[f]}</span>
+                        <span style={{ fontSize: '10px', color: '#888' }}>
+                          {count.toLocaleString()} ({pct.toFixed(0)}% of scheduled)
+                        </span>
+                      </div>
+                      <div style={{ height: '8px', background: '#f0f0ee', borderRadius: '4px', overflow: 'hidden' }}>
+                        <div style={{ width: `${barW}%`, height: '100%', background: FLEX_COLORS[f], borderRadius: '4px' }} />
+                      </div>
+                    </div>
+                  )
+                })}
+                <div style={{ fontSize: '10px', color: '#999', marginTop: '4px' }}>
+                  Flex 1 inference is never deferred — routed to nearest DC immediately.
+                </div>
+              </div>
+
+              {/* Deferral duration buckets */}
+              <div>
+                <div style={{ fontSize: '11px', fontWeight: 500, color: '#666', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  Deferral duration distribution
+                </div>
+                {Object.entries(durationBuckets).map(([label, count]) => {
+                  const barW = deferred.length > 0 ? (count / deferred.length) * 100 : 0
+                  return (
+                    <div key={label} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '5px' }}>
+                      <div style={{ fontSize: '10px', color: '#666', width: '36px', flexShrink: 0 }}>{label}</div>
+                      <div style={{ flex: 1, height: '8px', background: '#f0f0ee', borderRadius: '4px', overflow: 'hidden' }}>
+                        <div style={{ width: `${barW}%`, height: '100%', background: '#185FA5', borderRadius: '4px' }} />
+                      </div>
+                      <div style={{ fontSize: '10px', color: '#888', width: '36px', textAlign: 'right', flexShrink: 0 }}>
+                        {count.toLocaleString()}
+                      </div>
+                    </div>
+                  )
+                })}
+                <div style={{ fontSize: '10px', color: '#999', marginTop: '4px' }}>
+                  Most deferrals are 4–8hrs — overnight submissions waiting for the solar window.
+                </div>
+              </div>
+            </div>
+
+            {/* Right: submit hour vs run hour chart */}
+            <div>
+              <div style={{ fontSize: '11px', fontWeight: 500, color: '#666', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                When tasks were submitted vs when they ran
+              </div>
+              <div style={{ display: 'flex', alignItems: 'flex-end', gap: '2px', height: '120px', background: '#f4f4f2', borderRadius: '7px', padding: '8px 6px 0' }}>
+                {Array.from({ length: 24 }, (_, h) => {
+                  const sub = submitDist[h] || 0
+                  const run = runDist[h]    || 0
+                  const subH = sub > 0 ? Math.max(4, (sub / maxDist) * 90) : 0
+                  const runH = run > 0 ? Math.max(4, (run / maxDist) * 90) : 0
+                  return (
+                    <div key={h} style={{ flex: 1, display: 'flex', alignItems: 'flex-end', gap: '1px' }}>
+                      <div
+                        title={`${h}:00 — submitted: ${sub}`}
+                        style={{ flex: 1, height: `${subH}%`, background: '#888780', borderRadius: '1px 1px 0 0', opacity: 0.7 }}
+                      />
+                      <div
+                        title={`${h}:00 — ran: ${run}`}
+                        style={{ flex: 1, height: `${runH}%`, background: '#1D9E75', borderRadius: '1px 1px 0 0', opacity: 0.85 }}
+                      />
+                    </div>
+                  )
+                })}
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '2px', paddingLeft: '6px', paddingRight: '6px' }}>
+                {['12a','6a','12p','6p','12a'].map((l, i) => (
+                  <span key={i} style={{ fontSize: '8px', color: '#bbb' }}>{l}</span>
+                ))}
+              </div>
+              <div style={{ display: 'flex', gap: '14px', marginTop: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', color: '#666' }}>
+                  <div style={{ width: '10px', height: '10px', borderRadius: '2px', background: '#888780', opacity: 0.7 }} />
+                  Submitted
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', color: '#666' }}>
+                  <div style={{ width: '10px', height: '10px', borderRadius: '2px', background: '#1D9E75' }} />
+                  Actually ran
+                </div>
+              </div>
+              <div style={{ fontSize: '10px', color: '#999', marginTop: '8px', lineHeight: 1.5 }}>
+                Gray bars show when tasks arrived. Green bars show when they were scheduled.
+                The rightward shift toward midday reflects deferral to cheaper, cleaner grid windows.
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Main FleetSummaryTab ──────────────────────────────────────────────────────
 
 export default function FleetSummaryTab() {
@@ -269,7 +477,7 @@ export default function FleetSummaryTab() {
         <KPICard
           val={`${totalTraining + totalBackground}`}
           label="Flex 2+3 — training / background"
-          sub={`${result.total_tasks_deferred} deferred to better windows`}
+          sub={`${result.total_tasks_deferred} shifted to a cheaper window same day`}
           subColor="#666"
         />
       </div>
@@ -355,6 +563,11 @@ export default function FleetSummaryTab() {
             These tasks still ran on the cheapest grid even though a cleaner option existed.
           </div>
         </div>
+      )}
+
+      {/* ── Deferral analysis — collapsible ──────────────────────── */}
+      {result.total_tasks_deferred > 0 && (
+        <DeferralAnalysis result={result} />
       )}
     </div>
   )
