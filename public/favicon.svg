@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Dark background circle -->
+  <circle cx="16" cy="16" r="16" fill="#185FA5"/>
+  
+  <!-- Lightning bolt shape — represents grid/energy -->
+  <polygon points="18,4 10,17 15,17 14,28 22,15 17,15" fill="white" opacity="0.95"/>
+</svg>

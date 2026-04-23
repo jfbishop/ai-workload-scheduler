@@ -216,22 +216,17 @@ function FleetHourlyChart() {
 function DeferralAnalysis({ result }: { result: SimulationResult }) {
   const [open, setOpen] = useState(false)
 
-  // Guard: schedule may not be populated
-  if (!result.schedule || result.schedule.length === 0) return null
-
-  const deferred = result.schedule.filter(
+  const schedule = result.schedule ?? []
+  const deferred = schedule.filter(
     t => t.status === 'deferred' || (t.deferred_by_hours != null && t.deferred_by_hours > 0)
   )
-  const total = result.schedule.length
-
-  if (deferred.length === 0) return null
+  const total = schedule.length
 
   // Flex type breakdown
   const byFlex: Record<number, number> = { 1: 0, 2: 0, 3: 0 }
   deferred.forEach(t => { byFlex[t.flex_type] = (byFlex[t.flex_type] || 0) + 1 })
 
-  // Submit hour breakdown — how many deferred tasks were submitted each hour
-  // scheduled_hour can be 0-47 (48hr window), so clamp to 0-23 for display
+  // Submit hour vs run hour — clamp scheduled_hour to 0-23 for display
   const submitDist = Array(24).fill(0)
   const runDist    = Array(24).fill(0)
   deferred.forEach(t => {
@@ -253,6 +248,10 @@ function DeferralAnalysis({ result }: { result: SimulationResult }) {
   })
 
   const maxDist = Math.max(1, ...submitDist, ...runDist)
+
+  // Guard AFTER all hooks and derived data
+  if (schedule.length === 0 || deferred.length === 0) return null
+
   const FLEX_COLORS: Record<number, string> = { 1: '#7F77DD', 2: '#378ADD', 3: '#1D9E75' }
   const FLEX_LABELS: Record<number, string> = {
     1: 'Flex 1 — inference',
@@ -369,21 +368,27 @@ function DeferralAnalysis({ result }: { result: SimulationResult }) {
               <div style={{ fontSize: '11px', fontWeight: 500, color: '#666', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                 When tasks were submitted vs when they ran
               </div>
-              <div style={{ display: 'flex', alignItems: 'flex-end', gap: '2px', height: '120px', background: '#f4f4f2', borderRadius: '7px', padding: '8px 6px 0' }}>
+              <div style={{
+                display: 'flex', alignItems: 'flex-end', gap: '2px',
+                height: '120px',
+                background: '#f4f4f2', borderRadius: '7px',
+                padding: '8px 6px 0',
+                boxSizing: 'border-box',
+              }}>
                 {Array.from({ length: 24 }, (_, h) => {
                   const sub = submitDist[h] || 0
                   const run = runDist[h]    || 0
-                  const subH = sub > 0 ? Math.max(4, (sub / maxDist) * 90) : 0
-                  const runH = run > 0 ? Math.max(4, (run / maxDist) * 90) : 0
+                  const subH = sub > 0 ? Math.max(4, (sub / maxDist) * 100) : 0
+                  const runH = run > 0 ? Math.max(4, (run / maxDist) * 100) : 0
                   return (
-                    <div key={h} style={{ flex: 1, display: 'flex', alignItems: 'flex-end', gap: '1px' }}>
+                    <div key={h} style={{ flex: 1, display: 'flex', alignItems: 'flex-end', gap: '1px', height: '100%' }}>
                       <div
                         title={`${h}:00 — submitted: ${sub}`}
-                        style={{ flex: 1, height: `${subH}%`, background: '#888780', borderRadius: '1px 1px 0 0', opacity: 0.7 }}
+                        style={{ flex: 1, height: `${subH}px`, background: '#888780', borderRadius: '1px 1px 0 0', opacity: 0.7 }}
                       />
                       <div
                         title={`${h}:00 — ran: ${run}`}
-                        style={{ flex: 1, height: `${runH}%`, background: '#1D9E75', borderRadius: '1px 1px 0 0', opacity: 0.85 }}
+                        style={{ flex: 1, height: `${runH}px`, background: '#1D9E75', borderRadius: '1px 1px 0 0', opacity: 0.85 }}
                       />
                     </div>
                   )
