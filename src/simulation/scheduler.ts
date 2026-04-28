@@ -22,6 +22,41 @@
  */
 
 import type { Task, DataCenter, GridProfile } from './physics'
+import * as fs   from 'fs'
+import * as path from 'path'
+
+// Load model placement at module init
+// Maps dc_id → set of model_ids hosted there
+function loadPlacement(): Map<string, Set<string>> {
+  try {
+    // Use __dirname to find data/ relative to this file (src/simulation/)
+    // process.cwd() is unreliable in ts-node depending on how it's invoked
+    const dataDir = path.join(__dirname, '..', '..', 'data')
+    const raw     = fs.readFileSync(path.join(dataDir, 'placement.json'), 'utf-8')
+    const data    = JSON.parse(raw) as Record<string, { models: string[] }>
+    const map     = new Map<string, Set<string>>()
+    for (const [dcId, val] of Object.entries(data)) {
+      if (dcId.startsWith('_')) continue  // skip comment keys
+      map.set(dcId, new Set(val.models))
+    }
+    console.log(`  Loaded model placement: ${map.size} DCs`)
+    return map
+  } catch (e) {
+    console.warn('placement.json not found — all DCs accept all models:', e)
+    return new Map()
+  }
+}
+
+const MODEL_PLACEMENT = loadPlacement()
+
+/** Returns true if dc hosts the model required by this task (or task has no model requirement) */
+function dcHostsModel(dc: DataCenter, task: Task): boolean {
+  const modelId = (task as any).model_id as string | null
+  if (!modelId) return true                          // Flex 2/3 — no model constraint
+  const hosted = MODEL_PLACEMENT.get(dc.id)
+  if (!hosted || hosted.size === 0) return true      // no placement data — allow all
+  return hosted.has(modelId)
+}
 import { computeDistanceKm } from './physics'
 import {
   findBestPlacement,
@@ -178,12 +213,13 @@ function scheduleMode1(
     let assignedDc: DataCenter | null = null
 
     if (task.flex_type === 1) {
-      // Nearest DC with available capacity at submit hour
+      // Nearest DC that hosts the required model with available capacity
       const byDistance = [...dcs].sort((a, b) =>
         computeDistanceKm(task.origin_lat, task.origin_lon, a.lat, a.lon) -
         computeDistanceKm(task.origin_lat, task.origin_lon, b.lat, b.lon)
       )
       assignedDc = byDistance.find(dc =>
+        dcHostsModel(dc, task) &&
         hasCapacity(cap, dc, submitHour, task.duration_hours, task.gpu_count)
       ) ?? null
     } else {
@@ -263,6 +299,8 @@ function scheduleOptimized(
     const maxHour = Math.min(47, Math.floor(task.submit_minute_frac + task.deadline_hours))
 
     const feasibleDcs = dcs.filter(dc => {
+      // Must host the required model (Flex 2/3 have null model_id so always pass)
+      if (!dcHostsModel(dc, task)) return false
       // At least one hour in the window has capacity
       for (let h = submitHour; h <= maxHour; h++) {
         if (hasCapacity(cap, dc, h, task.duration_hours, task.gpu_count)) return true
@@ -276,14 +314,15 @@ function scheduleOptimized(
     }
 
     // Flex 1: hard real-time — bypass objective function entirely.
-    // Always route to the nearest DC with available capacity at submit hour.
-    // Latency is non-negotiable for live inference.
+    // Route to nearest DC that hosts the required model with available capacity.
+    // Model placement constraint may force routing past the geographically nearest DC.
     if (task.flex_type === 1) {
       const byDistance = [...feasibleDcs].sort((a, b) =>
         computeDistanceKm(task.origin_lat, task.origin_lon, a.lat, a.lon) -
         computeDistanceKm(task.origin_lat, task.origin_lon, b.lat, b.lon)
       )
       const nearestDc = byDistance.find(dc =>
+        dcHostsModel(dc, task) &&
         hasCapacity(cap, dc, submitHour, task.duration_hours, task.gpu_count)
       )
       if (!nearestDc) {

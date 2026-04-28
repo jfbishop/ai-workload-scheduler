@@ -1,0 +1,54 @@
+[
+  {
+    "model_id": "flash_7b",
+    "name": "Flash 7B",
+    "description": "Fast, lightweight model for high-volume low-complexity inference",
+    "params_billions": 7,
+    "gpu_memory_gb_per_replica": 14,
+    "min_replicas": 2,
+    "max_replicas": 6,
+    "traffic_share": 0.48,
+    "avg_tokens_per_request": 600,
+    "latency_sla_ms": 150,
+    "use_cases": ["autocomplete", "classification", "short-form generation"]
+  },
+  {
+    "model_id": "sonnet_35b",
+    "name": "Sonnet 35B",
+    "description": "General purpose mid-size model, most common enterprise workload",
+    "params_billions": 35,
+    "gpu_memory_gb_per_replica": 70,
+    "min_replicas": 2,
+    "max_replicas": 4,
+    "traffic_share": 0.32,
+    "avg_tokens_per_request": 1200,
+    "latency_sla_ms": 400,
+    "use_cases": ["chat", "summarization", "code generation", "analysis"]
+  },
+  {
+    "model_id": "opus_70b",
+    "name": "Opus 70B",
+    "description": "Large reasoning model, high GPU memory footprint, lower request volume",
+    "params_billions": 70,
+    "gpu_memory_gb_per_replica": 140,
+    "min_replicas": 1,
+    "max_replicas": 3,
+    "traffic_share": 0.12,
+    "avg_tokens_per_request": 2800,
+    "latency_sla_ms": 800,
+    "use_cases": ["complex reasoning", "long-form generation", "research tasks"]
+  },
+  {
+    "model_id": "vision_13b",
+    "name": "Vision 13B",
+    "description": "Multimodal model handling image and text inputs, bursty traffic pattern",
+    "params_billions": 13,
+    "gpu_memory_gb_per_replica": 26,
+    "min_replicas": 1,
+    "max_replicas": 3,
+    "traffic_share": 0.08,
+    "avg_tokens_per_request": 900,
+    "latency_sla_ms": 500,
+    "use_cases": ["image understanding", "document parsing", "visual QA"]
+  }
+]

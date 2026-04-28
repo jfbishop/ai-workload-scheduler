@@ -1,0 +1,29 @@
+{
+  "_comment": "Static model placement across data centers. Placement decisions are constrained by GPU memory capacity. Opus 70B (140GB/replica) can only be hosted at the two largest facilities. Vision 13B is concentrated at coastal DCs where enterprise multimodal demand is highest.",
+  "_methodology": "Each DC reserves GPU memory for model weights. Placement optimized for coverage and latency, not grid cost — this intentional tension between placement and grid optimization is a key finding.",
+
+  "dc_hammond_il": {
+    "models": ["flash_7b", "sonnet_35b", "opus_70b"],
+    "note": "Largest facility (80MW). Only Midwest DC hosting Opus 70B — NYC/Boston users needing Opus must route here despite distance."
+  },
+  "dc_plano_tx": {
+    "models": ["flash_7b", "sonnet_35b"],
+    "note": "Mid-size facility (30MW). Flash and Sonnet only — insufficient memory headroom for Opus 70B without crowding out inference capacity."
+  },
+  "dc_chester_va": {
+    "models": ["flash_7b", "sonnet_35b"],
+    "note": "Smallest facility (28MW). Flash and Sonnet only. Serves DC/Virginia corridor for low-latency Flex 1."
+  },
+  "dc_weehawken_nj": {
+    "models": ["flash_7b", "sonnet_35b", "vision_13b"],
+    "note": "NYC metro (50MW). Vision 13B hosted here for enterprise multimodal demand. No Opus 70B — memory would crowd out Flash inference capacity for the dense NYC request volume."
+  },
+  "dc_eagle_mountain_ut": {
+    "models": ["flash_7b", "sonnet_35b", "opus_70b", "vision_13b"],
+    "note": "Second largest facility (75MW). Full model catalog. West Coast overflow for Opus 70B when San Jose is at capacity."
+  },
+  "dc_san_jose_ca": {
+    "models": ["flash_7b", "sonnet_35b", "vision_13b"],
+    "note": "Bay Area (40MW). No Opus 70B — 140GB replica would consume 17% of total GPU memory, crowding out the high-volume Flash inference traffic on CAISO's cheap solar grid."
+  }
+}
