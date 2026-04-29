@@ -30,6 +30,10 @@ export interface DataCenter {
   gpu_p_idle_kw: number
   hourly_ambient_temp_c: number[]   // [0..23]
   hourly_pue: number[]              // [0..23]
+  battery_capacity_kwh: number
+  charge_rate_kw: number
+  discharge_rate_kw: number
+  round_trip_efficiency: number
 }
 
 export interface GridProfile {
@@ -97,6 +101,7 @@ export interface ScheduledTask {
   lmp_usd_per_mwh: number
   carbon_g_co2_per_kwh: number
   solar_offset_kwh: number
+  bess_offset_kwh: number
   distance_km: number
   latency_ms: number
   cost_vs_carbon_conflict: boolean
@@ -131,12 +136,53 @@ export interface SolarInvestmentRanking {
   totalAnnualValueUsd:        number
 }
 
+export interface BESSHourlyState {
+  soc_kwh: number         // state of charge at start of this hour
+  bess_offset_kw: number  // discharge power offsetting grid draw (0 when charging)
+  charging: boolean       // true = battery is charging this hour
+}
+
+export interface BESSSchedule {
+  dc_id: string
+  hourly: BESSHourlyState[]  // 24 elements, one per simulation hour
+}
+
+export interface BESSRevenueHour {
+  hour: number
+  dc_load_kwh: number
+  bess_discharge_kwh: number
+  bess_charge_kwh_from_grid: number
+  lmp_usd_per_mwh: number
+  arbitrage_savings_usd: number
+  charging_cost_usd: number
+}
+
+export interface BESSRevenueResult {
+  dc_id: string
+  dc_name: string
+  market_name: string
+  bess_capacity_kw: number
+  arbitrage_savings_usd: number
+  charging_cost_usd: number
+  net_arbitrage_usd: number
+  capacity_market_usd: number
+  net_benefit_usd: number
+  hourly: BESSRevenueHour[]
+}
+
 export interface SimulationResult {
   mode: SimMode
   schedule: ScheduledTask[]
   dropped_tasks: string[]
   dc_hourly_gpu_usage: DCHourlyGpuUsage
   solar_rankings?: SolarInvestmentRanking[]
+  bess_schedules?: BESSSchedule[]
+  bess_revenue?: BESSRevenueResult[]
+  total_bess_arbitrage_usd?: number
+  total_bess_charging_cost_usd?: number
+  total_bess_net_arbitrage_usd?: number
+  total_capacity_market_usd?: number
+  total_bess_net_benefit_usd?: number
   total_cost_usd: number
   total_carbon_kg: number
   total_tasks_scheduled: number

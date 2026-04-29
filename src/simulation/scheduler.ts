@@ -21,8 +21,9 @@
  *   Also produces investment ranking for solar/storage by DC
  */
 
-import type { Task, DataCenter, GridProfile } from './physics'
-import { computeDistanceKm } from './physics'
+import type { Task, DataCenter, GridProfile, BESSSchedule } from './physics'
+import { computeDistanceKm, computeTaskPlacementCost, precomputeBESSSchedule } from './physics'
+import { computeBESSRevenue } from './bessRevenue'
 import {
   findBestPlacement,
   rankSolarInvestments,
@@ -70,6 +71,7 @@ export interface ScheduledTask {
   lmp_usd_per_mwh: number
   carbon_g_co2_per_kwh: number
   solar_offset_kwh: number      // 0 for Modes 1/2
+  bess_offset_kwh: number       // 0 for Modes 1/2
 
   // Routing metadata
   distance_km: number
@@ -96,6 +98,13 @@ export interface SimulationResult {
   dropped_tasks: string[]           // request_ids that couldn't be placed
   dc_hourly_gpu_usage: DCHourlyCapacity
   solar_rankings?: SolarInvestmentScore[]  // Mode 3 only
+  bess_schedules?: BESSSchedule[]          // Mode 3 only
+  bess_revenue?: import('./types').BESSRevenueResult[]
+  total_bess_arbitrage_usd?: number
+  total_bess_charging_cost_usd?: number
+  total_bess_net_arbitrage_usd?: number
+  total_capacity_market_usd?: number
+  total_bess_net_benefit_usd?: number
 
   // Fleet-level aggregates
   total_cost_usd: number
@@ -221,6 +230,7 @@ function scheduleMode1(
         lmpUsdPerMwh: grid.lmp_usd_per_mwh[submitHour],
         carbonGCo2PerKwh: grid.carbon_g_co2_per_kwh[submitHour],
         solarOffsetKwh: 0,
+        bessOffsetKwh: 0,
       }
     }
 
@@ -242,6 +252,11 @@ function scheduleOptimized(
   const schedule: ScheduledTask[] = []
   const dropped: string[] = []
   const includeSolar = mode === 3
+
+  // Mode 3 only: pre-compute 24h BESS dispatch schedules for all DCs
+  const bessSchedules: BESSSchedule[] | null = mode === 3
+    ? dcs.map(dc => precomputeBESSSchedule(dc, grids.get(dc.utility_id)!))
+    : null
 
   // Process live Aug 15 tasks only — no backlog.
   // All three modes now compare apples-to-apples on the same 8,000 live tasks.
@@ -292,21 +307,22 @@ function scheduleOptimized(
       }
       const grid = grids.get(nearestDc.utility_id)!
       occupyCapacity(cap, nearestDc.id, submitHour, task.duration_hours, task.gpu_count)
-      const { placement } = { placement: {
-        itPowerKw:        task.power_draw_kw,
-        totalPowerKw:     task.power_draw_kw * nearestDc.hourly_pue[submitHour],
-        totalEnergyKwh:   task.energy_kwh * nearestDc.hourly_pue[submitHour],
-        netGridEnergyKwh: task.energy_kwh * nearestDc.hourly_pue[submitHour],
-        costUsd:          task.energy_kwh * nearestDc.hourly_pue[submitHour] * (grid.lmp_usd_per_mwh[submitHour] / 1000),
-        carbonKg:         task.energy_kwh * nearestDc.hourly_pue[submitHour] * grid.carbon_g_co2_per_kwh[submitHour] / 1000,
-        latencyMs:        computeDistanceKm(task.origin_lat, task.origin_lon, nearestDc.lat, nearestDc.lon) / 100 + 5,
-        distanceKm:       computeDistanceKm(task.origin_lat, task.origin_lon, nearestDc.lat, nearestDc.lon),
-        pue:              nearestDc.hourly_pue[submitHour],
-        lmpUsdPerMwh:     grid.lmp_usd_per_mwh[submitHour],
-        carbonGCo2PerKwh: grid.carbon_g_co2_per_kwh[submitHour],
-        solarOffsetKwh:   0,
-      }}
-      schedule.push(buildScheduledTask(task, nearestDc, submitHour, placement, mode, false, null))
+      const p = computeTaskPlacementCost(task, nearestDc, grid, submitHour, includeSolar)
+      schedule.push(buildScheduledTask(task, nearestDc, submitHour, {
+        itPowerKw:        p.itPowerKw,
+        totalPowerKw:     p.totalPowerKw,
+        totalEnergyKwh:   p.totalEnergyKwh,
+        netGridEnergyKwh: p.netGridEnergyKwh,
+        costUsd:          p.costUsd,
+        carbonKg:         p.carbonKg,
+        latencyMs:        p.latencyMs,
+        distanceKm:       p.distanceKm,
+        pue:              p.pue,
+        lmpUsdPerMwh:     p.lmpUsdPerMwh,
+        carbonGCo2PerKwh: p.carbonGCo2PerKwh,
+        solarOffsetKwh:   p.solarOffsetKwh,
+        bessOffsetKwh:    p.bessOffsetKwh,
+      }, mode, false, null))
       continue
     }
 
@@ -344,6 +360,7 @@ function scheduleOptimized(
         lmpUsdPerMwh: fallback.score.placement.lmpUsdPerMwh,
         carbonGCo2PerKwh: fallback.score.placement.carbonGCo2PerKwh,
         solarOffsetKwh: fallback.score.placement.solarOffsetKwh,
+        bessOffsetKwh:  fallback.score.placement.bessOffsetKwh,
       }, mode, false, null, fallback.score))
       continue
     }
@@ -367,6 +384,7 @@ function scheduleOptimized(
         lmpUsdPerMwh:      best.score.placement.lmpUsdPerMwh,
         carbonGCo2PerKwh:  best.score.placement.carbonGCo2PerKwh,
         solarOffsetKwh:    best.score.placement.solarOffsetKwh,
+        bessOffsetKwh:     best.score.placement.bessOffsetKwh,
       },
       mode,
       best.conflict.hasConflict,
@@ -379,6 +397,41 @@ function scheduleOptimized(
 
   if (mode === 3) {
     result.solar_rankings = rankSolarInvestments(dcs, grids)
+    result.bess_schedules = bessSchedules ?? undefined
+
+    // Post-hoc BESS revenue: aggregate actual task energy per DC per hour,
+    // then compute arbitrage savings and capacity market payments.
+    // This runs after scheduling so it has no influence on task placement.
+    if (bessSchedules) {
+      const dcHourlyLoadKwh = new Map<string, number[]>(
+        dcs.map(dc => [dc.id, new Array(24).fill(0)])
+      )
+      for (const task of schedule) {
+        const arr    = dcHourlyLoadKwh.get(task.assigned_dc_id)!
+        const startH = Math.min(23, Math.floor(task.scheduled_hour))
+        const spanH  = Math.max(1, Math.ceil(task.duration_hours))
+        const kwhPerHour = task.total_energy_kwh / spanH
+        for (let h = startH; h < Math.min(24, startH + spanH); h++) {
+          arr[h] += kwhPerHour
+        }
+      }
+
+      const bessRevenue = dcs.map(dc =>
+        computeBESSRevenue(
+          dc,
+          bessSchedules.find(b => b.dc_id === dc.id)!,
+          dcHourlyLoadKwh.get(dc.id)!,
+          grids.get(dc.utility_id)!,
+        )
+      )
+
+      result.bess_revenue                  = bessRevenue
+      result.total_bess_arbitrage_usd      = bessRevenue.reduce((s, r) => s + r.arbitrage_savings_usd, 0)
+      result.total_bess_charging_cost_usd  = bessRevenue.reduce((s, r) => s + r.charging_cost_usd, 0)
+      result.total_bess_net_arbitrage_usd  = bessRevenue.reduce((s, r) => s + r.net_arbitrage_usd, 0)
+      result.total_capacity_market_usd     = bessRevenue.reduce((s, r) => s + r.capacity_market_usd, 0)
+      result.total_bess_net_benefit_usd    = bessRevenue.reduce((s, r) => s + r.net_benefit_usd, 0)
+    }
   }
 
   return result
@@ -399,6 +452,7 @@ interface RawPlacement {
   lmpUsdPerMwh: number
   carbonGCo2PerKwh: number
   solarOffsetKwh: number
+  bessOffsetKwh: number
 }
 
 function buildScheduledTask(
@@ -442,6 +496,7 @@ function buildScheduledTask(
     lmp_usd_per_mwh:         placement.lmpUsdPerMwh,
     carbon_g_co2_per_kwh:    placement.carbonGCo2PerKwh,
     solar_offset_kwh:        placement.solarOffsetKwh,
+    bess_offset_kwh:         placement.bessOffsetKwh,
     distance_km:             placement.distanceKm,
     latency_ms:              placement.latencyMs,
     cost_vs_carbon_conflict: hasConflict,

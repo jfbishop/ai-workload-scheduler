@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-23T01:43:56.554Z",
+  "generated_at": "2026-04-28T21:42:25.579Z",
   "simulation_date": "2024-08-15",
   "task_count": 9500,
   "modes": {
@@ -13,24 +13,24 @@
       "conflict_count": 0
     },
     "mode2_optimized": {
-      "total_cost_usd": 158015.9064926179,
-      "total_carbon_kg": 885512.1010265413,
-      "total_energy_kwh": 2818972.98874306,
+      "total_cost_usd": 158015.90744334736,
+      "total_carbon_kg": 885512.1064717248,
+      "total_energy_kwh": 2818972.9994011824,
       "tasks_scheduled": 8000,
       "tasks_deferred": 2828,
       "tasks_dropped": 0,
       "conflict_count": 1427,
       "vs_baseline": {
-        "cost_delta_usd": -126113.59341426392,
+        "cost_delta_usd": -126113.59246353447,
         "cost_pct_change": "-44.4%",
-        "carbon_delta_kg": -23965.779911897494,
+        "carbon_delta_kg": -23965.774466714007,
         "carbon_pct_change": "-2.6%"
       }
     },
     "mode3_solar": {
-      "total_cost_usd": 112988.45471550201,
-      "total_carbon_kg": 698916.5067822671,
-      "total_energy_kwh": 2038121.740210153,
+      "total_cost_usd": 112716.52210844922,
+      "total_carbon_kg": 698107.830691517,
+      "total_energy_kwh": 2035429.8163111475,
       "tasks_scheduled": 8000,
       "tasks_deferred": 2828,
       "tasks_dropped": 0,
@@ -42,14 +42,14 @@
           "annualCostDisplacementUsd": 1589339,
           "annualCarbonDisplacementKg": 4599968,
           "storageMultiplier": 1,
-          "drEligible": false,
-          "drAnnualValueUsd": 0,
-          "drShedPct": 20,
+          "drEligible": true,
+          "drAnnualValueUsd": 371600,
+          "drShedPct": 10,
           "coincidentPeakSavingsUsd": 998812,
           "investmentScore": 100,
           "roofUtilizationPct": 100,
-          "paybackYearsEstimate": 2.9,
-          "totalAnnualValueUsd": 2588151
+          "paybackYearsEstimate": 2.5,
+          "totalAnnualValueUsd": 2959751
         },
         {
           "dcId": "dc_eagle_mountain_ut",
@@ -57,14 +57,14 @@
           "annualCostDisplacementUsd": 1371785,
           "annualCarbonDisplacementKg": 6683766,
           "storageMultiplier": 1,
-          "drEligible": false,
-          "drAnnualValueUsd": 0,
-          "drShedPct": 20,
+          "drEligible": true,
+          "drAnnualValueUsd": 139360,
+          "drShedPct": 10,
           "coincidentPeakSavingsUsd": 499406,
-          "investmentScore": 90,
+          "investmentScore": 88,
           "roofUtilizationPct": 100,
-          "paybackYearsEstimate": 3.7,
-          "totalAnnualValueUsd": 1871192
+          "paybackYearsEstimate": 3.5,
+          "totalAnnualValueUsd": 2010552
         },
         {
           "dcId": "dc_weehawken_nj",
@@ -72,14 +72,14 @@
           "annualCostDisplacementUsd": 1093054,
           "annualCarbonDisplacementKg": 2853410,
           "storageMultiplier": 1,
-          "drEligible": false,
-          "drAnnualValueUsd": 0,
-          "drShedPct": 20,
+          "drEligible": true,
+          "drAnnualValueUsd": 232250,
+          "drShedPct": 10,
           "coincidentPeakSavingsUsd": 624258,
-          "investmentScore": 68,
+          "investmentScore": 67,
           "roofUtilizationPct": 100,
-          "paybackYearsEstimate": 2.7,
-          "totalAnnualValueUsd": 1717312
+          "paybackYearsEstimate": 2.4,
+          "totalAnnualValueUsd": 1949562
         },
         {
           "dcId": "dc_plano_tx",
@@ -87,14 +87,14 @@
           "annualCostDisplacementUsd": 903640,
           "annualCarbonDisplacementKg": 1663768,
           "storageMultiplier": 1.02,
-          "drEligible": false,
-          "drAnnualValueUsd": 0,
-          "drShedPct": 20,
+          "drEligible": true,
+          "drAnnualValueUsd": 97545,
+          "drShedPct": 10,
           "coincidentPeakSavingsUsd": 275319,
-          "investmentScore": 53,
+          "investmentScore": 52,
           "roofUtilizationPct": 100,
-          "paybackYearsEstimate": 2.4,
-          "totalAnnualValueUsd": 1178958
+          "paybackYearsEstimate": 2.2,
+          "totalAnnualValueUsd": 1276503
         },
         {
           "dcId": "dc_chester_va",
@@ -102,14 +102,14 @@
           "annualCostDisplacementUsd": 566617,
           "annualCarbonDisplacementKg": 1801319,
           "storageMultiplier": 1,
-          "drEligible": false,
-          "drAnnualValueUsd": 0,
-          "drShedPct": 20,
+          "drEligible": true,
+          "drAnnualValueUsd": 130050,
+          "drShedPct": 10,
           "coincidentPeakSavingsUsd": 349584,
           "investmentScore": 36,
           "roofUtilizationPct": 100,
-          "paybackYearsEstimate": 2.8,
-          "totalAnnualValueUsd": 916201
+          "paybackYearsEstimate": 2.5,
+          "totalAnnualValueUsd": 1046251
         },
         {
           "dcId": "dc_san_jose_ca",
@@ -117,27 +117,27 @@
           "annualCostDisplacementUsd": 98843,
           "annualCarbonDisplacementKg": 490486,
           "storageMultiplier": 9.38,
-          "drEligible": false,
-          "drAnnualValueUsd": 0,
-          "drShedPct": 20,
+          "drEligible": true,
+          "drAnnualValueUsd": 148640,
+          "drShedPct": 10,
           "coincidentPeakSavingsUsd": 0,
-          "investmentScore": 18,
+          "investmentScore": 19,
           "roofUtilizationPct": 100,
-          "paybackYearsEstimate": 37.6,
-          "totalAnnualValueUsd": 98843
+          "paybackYearsEstimate": 15,
+          "totalAnnualValueUsd": 247483
         }
       ],
       "vs_baseline": {
-        "cost_delta_usd": -171141.04519137982,
-        "cost_pct_change": "-60.2%",
-        "carbon_delta_kg": -210561.3741561717,
+        "cost_delta_usd": -171412.9777984326,
+        "cost_pct_change": "-60.3%",
+        "carbon_delta_kg": -211370.05024692183,
         "carbon_pct_change": "-23.2%"
       },
       "vs_mode2": {
-        "cost_delta_usd": -45027.4517771159,
-        "cost_pct_change": "-28.5%",
-        "carbon_delta_kg": -186595.5942442742,
-        "carbon_pct_change": "-21.1%"
+        "cost_delta_usd": -45299.385334898136,
+        "cost_pct_change": "-28.7%",
+        "carbon_delta_kg": -187404.27578020783,
+        "carbon_pct_change": "-21.2%"
       }
     }
   }

@@ -98,6 +98,113 @@ All values scaled from single-day simulation to annual estimates. Solar potentia
 
 ---
 
+## BESS revenue model
+
+Mode 3 computes battery economics **post-hoc** after scheduling completes. BESS has no influence on where tasks are routed — it is a DC-level financial layer on top of the routing decision.
+
+Two revenue streams are modeled:
+
+**1. Energy arbitrage (net)**
+For each hour, actual BESS discharge is capped at real DC load (BESS cannot "save" more than the DC consumed). Charging cost is deducted using the DC's round-trip efficiency (0.90 per `data_centers.json`; Li-ion typical 0.85, NREL ATB 2023).
+
+**2. Capacity market availability payments**
+
+| Market | $/MW-day | Source |
+|---|---|---|
+| PJM (all 3 zones) | $300 | Midpoint of 2025/26 BRA ($269.92) and 2026/27 cap ($329.17); pjm.com |
+| ERCOT ERS (summer) | $114 | $50M annual budget ÷ ~1,200 MW summer procurement; PUCT Rule 25.507 |
+| CAISO RA | $292.33 | $8.77/kW-month H1 2025 battery RA avg (Modo Energy, Oct 2025) × 1000/30 |
+| PacifiCorp PACE | $0 | No organized capacity market; bilateral RFPs only (PacifiCorp 2025 IRP) |
+
+**Effective cost** = Mode 3 gross electricity cost − BESS net benefit (arbitrage + capacity).
+
+### Caveats
+
+1. **Performance factor**: Assumes 100% availability. Real capacity market registrations typically derate 5–15% for unavailability risk.
+2. **CSP qualification**: BTM BESS registering in PJM/CAISO capacity markets requires a Curtailment Service Provider (CSP) relationship and peak-hour performance obligations. Modeled as unconditional here.
+3. **Charging assumption (Plan A)**: BESS charges from grid at prevailing LMP. Plan B (charge from solar surplus, marginal cost $0) would improve net arbitrage by eliminating charging cost; not modeled.
+4. **DR energy event payments**: Not included. In a wholesale LMP model, the arbitrage savings (avoided grid purchase) and a DR energy payment (ISO pays you at LMP) for the same kWh would double-count. Capacity payments are the non-overlapping revenue stream.
+5. **PacifiCorp**: $0 is conservative and academically defensible. NWPP bilateral capacity contracts exist but prices are not publicly disclosed.
+
+---
+
+## BESS-aware routing — extension guide
+
+The current scheduler routes tasks based on LMP, carbon intensity, latency, and deferral urgency. BESS does not influence where tasks go. A future extension could add a **routing bonus** for placing tasks at DCs where the battery currently holds stored energy, increasing the probability that the BESS actually discharges for real tasks.
+
+### Design
+
+The key tension: BESS discharges during *expensive* LMP hours, but the scheduler already tries to *avoid* expensive LMP hours for Flex 2/3 tasks (by deferring them). Adding a BESS bonus must be small enough not to override deferral logic — it should only tip marginal decisions, not pull tasks to expensive DCs.
+
+Correct formulation:
+
+```
+bessBonus(dc, hour) = BESS_ROUTING_WEIGHT
+                      × (bessAvailableKwh[dc][hour] / dc.battery_capacity_kwh)
+                      × clamp(dc_lmp_normalized − 0.5, 0, 1)
+```
+
+The second term ensures the bonus only activates when LMP is above the normalization midpoint (i.e., BESS discharge is economically meaningful). At cheap hours the bonus is zero — the battery wouldn't discharge anyway.
+
+### Implementation
+
+**Step 1** — Add parameter to `objective.ts → findBestPlacement()`:
+
+```typescript
+// In objective.ts
+export function findBestPlacement(
+  task: Task,
+  dcs: DataCenter[],
+  grids: Map<string, GridProfile>,
+  includeSolar = false,
+  capacity?: Record<string, number[]>,
+  bessAvailableKwh?: Map<string, number[]>,  // dc_id → 24 remaining kWh per hour
+): BestPlacement | null
+```
+
+**Step 2** — Consume in `scoreTaskPlacement()`:
+
+```typescript
+// In scoreTaskPlacement(), after computing costScore:
+const bessBonus = bessAvailableKwh
+  ? BESS_ROUTING_WEIGHT
+    * (bessAvailableKwh.get(dc.id)?.[scheduledHour] ?? 0) / dc.battery_capacity_kwh
+    * Math.max(0, normalizeLMP(placement.lmpUsdPerMwh) - 0.5)
+  : 0
+// Subtract from totalScore (lower = better): bessBonus reduces score at BESS-holding DCs
+totalScore -= bessBonus
+```
+
+**Step 3** — Maintain reservation state in `scheduler.ts → scheduleOptimized()`:
+
+```typescript
+// Initialize from precomputeBESSSchedule
+const bessAvailableKwh: Map<string, number[]> = new Map(
+  dcs.map(dc => [
+    dc.id,
+    bessSchedules!.find(b => b.dc_id === dc.id)!.hourly.map(s => s.bess_offset_kw),
+  ])
+)
+// After each task placement, deduct task.total_energy_kwh from bessAvailableKwh[dc][hour]
+// so subsequent tasks don't double-claim the same BESS capacity
+```
+
+**Step 4** — Add constant in `objective.ts`:
+
+```typescript
+export const BESS_ROUTING_WEIGHT = 0.08  // tune: 0 disables, 0.05–0.15 is reasonable range
+```
+
+### Tradeoff
+
+- **Too high** (>0.20): BESS bonus overrides deferral incentive. Flex 2/3 tasks stop deferring to cheap hours and instead cluster at BESS-holding DCs during expensive hours. Total cost rises.
+- **Too low** (<0.02): Effectively disabled. Routing is identical to current implementation.
+- **Sweet spot** (~0.05–0.10): Tasks are marginally more likely to land at a BESS-holding DC when cost/carbon scores are otherwise close between candidates.
+
+This extension is most valuable for **Flex 1** tasks (which cannot be deferred anyway) and for **Flex 2/3 tasks in off-peak hours** where multiple DCs have similar LMP/carbon scores and the tiebreaker matters.
+
+---
+
 ## Grid data sources
 
 Electricity price (LMP) and carbon intensity profiles are based on historical August 15 data:
@@ -129,6 +236,7 @@ ai-workload-scheduler/
 │   │   ├── physics.ts          # Power draw, PUE, latency, cost, carbon math
 │   │   ├── objective.ts        # Scoring function, DR/coincident peak, solar ranking
 │   │   ├── scheduler.ts        # Routing algorithm — all 3 modes
+│   │   ├── bessRevenue.ts      # Post-hoc BESS arbitrage + capacity market revenue
 │   │   └── types.ts            # Shared TypeScript interfaces
 │   ├── store/
 │   │   └── simulationStore.ts  # Zustand state — simulation results, playback clock
