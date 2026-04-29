@@ -19,19 +19,24 @@ export default function Home() {
     async function init() {
       try {
         // Load static data files in parallel
-        const [dcsRes, gridsRes, tasksRes] = await Promise.all([
+        const [dcsRes, gridsRes, tasksRes, placementRes] = await Promise.all([
           fetch('/api/data?file=data_centers'),
           fetch('/api/data?file=grid'),
           fetch('/api/data?file=workloads'),
+          fetch('/api/data?file=placement'),
         ])
 
         if (!dcsRes.ok || !gridsRes.ok || !tasksRes.ok) {
           throw new Error('Failed to load data files. Have you run npm run simulate?')
         }
 
-        const dcs:   DataCenter[]  = await dcsRes.json()
-        const grids: GridProfile[] = await gridsRes.json()
-        const tasks: Task[]        = await tasksRes.json()
+        const dcs:       DataCenter[]  = await dcsRes.json()
+        const grids:     GridProfile[] = await gridsRes.json()
+        const tasks:     Task[]        = await tasksRes.json()
+        const placement: unknown       = placementRes.ok ? await placementRes.json() : {}
+
+        // Expose placement to window so DC hover tooltips can read it
+        ;(window as any).__modelPlacement = placement
 
         loadStaticData(dcs, grids, tasks)
 
@@ -48,7 +53,7 @@ export default function Home() {
           if (result) loadResult(result)
         }
 
-        // Default to Mode 1
+        // Default to Mode 2
         useSimulationStore.getState().setActiveMode(1)
         setLoading(false)
       } catch (err) {
@@ -69,7 +74,7 @@ export default function Home() {
         background: 'var(--color-bg, #f9f9f8)',
       }}>
         <div style={{ fontSize: '15px', color: '#444' }}>Loading simulation data...</div>
-        <div style={{ fontSize: '12px', color: '#888' }}>Aug 15 · 8,000 tasks · 6 data centers</div>
+        <div style={{ fontSize: '12px', color: '#888' }}>Aug 15 · 9,500 tasks · 6 data centers</div>
       </div>
     )
   }

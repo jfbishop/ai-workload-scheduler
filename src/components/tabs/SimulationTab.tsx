@@ -334,9 +334,17 @@ function USMap() {
                     const pt   = (svg as SVGSVGElement).createSVGPoint()
                     pt.x = e.clientX; pt.y = e.clientY
                     tip.style.display = 'block'
-                    tip.style.left = `${e.clientX - rect.left + 12}px`
-                    tip.style.top  = `${e.clientY - rect.top  - 36}px`
-                    tip.innerHTML = `<strong>${dc.name}</strong><br/>${dc.capacity_mw} MW · ${dc.gpu_count.toLocaleString()} GPUs<br/>${dc.grid_operator} · ${dc.grid_zone}`
+                    const tipWidth = 210
+                    const nearRight = (e.clientX - rect.left) > rect.width - tipWidth - 20
+                    tip.style.left  = nearRight ? 'auto' : `${e.clientX - rect.left + 12}px`
+                    tip.style.right = nearRight ? `${rect.right - e.clientX + 12}px` : 'auto'
+                    tip.style.top   = `${e.clientY - rect.top - 36}px`
+                    // Build hosted models string from placement data
+                  const placement = (window as any).__modelPlacement
+                  const hostedModels = placement?.[dc.id]?.models
+                    ?.map((m: string) => m.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()))
+                    ?.join(', ') ?? 'loading...'
+                  tip.innerHTML = `<strong>${dc.name}</strong><br/>${dc.capacity_mw} MW · ${dc.gpu_count.toLocaleString()} GPUs<br/>${dc.grid_operator} · ${dc.grid_zone}<br/><span style="color:#bbb">Models: </span>${hostedModels}`
                   }}
                   onMouseLeave={() => {
                     const tip = document.getElementById('dc-map-tooltip')
@@ -567,7 +575,10 @@ function TaskQueue() {
           <FlexBadge flex={t.flex_type} />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: '11px', color: '#1a1a1a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {t.task_type.replace(/_/g, ' ')} · {t.origin_city}
+              {(t as any).model_id
+                ? <span style={{ color: '#7F77DD', fontWeight: 500 }}>{((t as any).model_id as string).replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())} · </span>
+                : null
+              }{t.task_type.replace(/_/g, ' ')} · {t.origin_city}
             </div>
             <div style={{
               fontSize: '10px',
@@ -666,6 +677,27 @@ export default function SimulationTab() {
 
         {/* Right sidebar */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          {/* Model placement callout */}
+          <div style={{
+            background: '#EEEDFE',
+            border: '0.5px solid #C5C2F5',
+            borderRadius: '10px',
+            padding: '10px 12px',
+          }}>
+            <div style={{ fontSize: '11px', fontWeight: 500, color: '#3C3489', marginBottom: '5px' }}>
+              ◈ Model placement constraints active
+            </div>
+            <div style={{ fontSize: '10px', color: '#534AB7', lineHeight: 1.6 }}>
+              Flex 1 inference requests are routed to the nearest DC
+              that has the required model loaded in GPU memory —
+              not simply the nearest DC.
+              Opus 70B is only resident at <strong>Hammond IL</strong> and{' '}
+              <strong>Eagle Mountain UT</strong>. East Coast Opus requests
+              must route to Hammond even when Weehawken NJ is closer,
+              illustrating that AI compute is not fully fungible.
+            </div>
+          </div>
+
           {/* GPU utilization */}
           <div style={{
             background: '#fff', border: '0.5px solid rgba(0,0,0,0.10)',

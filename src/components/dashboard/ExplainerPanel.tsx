@@ -88,7 +88,7 @@ export default function ExplainerPanel() {
           }}>
             This simulator asks: <span style={{ fontWeight: 500 }}>what if AI data centers
             scheduled workloads based on when and where electricity is cheapest and cleanest?</span>{' '}
-            It models 9,500 AI tasks — from real-time inference to overnight training runs — routed
+            It models 8,000 AI tasks — from real-time inference to overnight training runs — routed
             across 6 US data centers using three different strategies. Switch between modes using the
             pills in the top right to see the impact on cost and carbon.
           </div>
@@ -129,11 +129,12 @@ export default function ExplainerPanel() {
             <button
               onClick={() => setDismissed(true)}
               style={{
-                fontSize: '12px', padding: '5px 14px',
+                fontSize: '12px', padding: '6px 16px',
                 borderRadius: '8px',
-                border: '0.5px solid rgba(0,0,0,0.15)',
-                background: '#fff', color: '#444',
+                border: 'none',
+                background: '#185FA5', color: '#fff',
                 cursor: 'pointer',
+                fontWeight: 500,
               }}
             >
               Got it ✓

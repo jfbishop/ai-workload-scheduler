@@ -61,6 +61,7 @@ export interface Task {
   power_draw_kw: number
   energy_kwh: number
   is_backlog?: boolean   // true = submitted Aug 14, carried over to Aug 15 queue
+  model_id?: string | null  // Flex 1 only — which model this request needs
 }
 
 // ── Scheduled task (output of simulation engine) ──────────────────────────────

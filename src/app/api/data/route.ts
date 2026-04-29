@@ -29,6 +29,8 @@ const ALLOWED_FILES: Record<string, string> = {
   schedule_mode2:  'results/schedule_mode2.json',
   schedule_mode3:  'results/schedule_mode3.json',
   summary:         'results/summary.json',
+  models:          'data/models.json',
+  placement:       'data/placement.json',
 }
 
 export async function GET(req: NextRequest) {

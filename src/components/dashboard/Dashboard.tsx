@@ -155,7 +155,7 @@ export default function Dashboard() {
             <span style={{ color: C.blue }}>· Aug 15</span>
           </div>
           <div style={{ fontSize: '11px', color: C.textSec, marginTop: '2px' }}>
-            Grid-aware task routing simulation · {tasks.length > 0 ? tasks.length.toLocaleString() : '8,000'} tasks · {dcs.length > 0 ? dcs.length : 6} data centers
+            Grid-aware task routing simulation · 8,000 tasks · {dcs.length > 0 ? dcs.length : 6} data centers
           </div>
         </div>
 
