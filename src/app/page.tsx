@@ -74,7 +74,7 @@ export default function Home() {
         background: 'var(--color-bg, #f9f9f8)',
       }}>
         <div style={{ fontSize: '15px', color: '#444' }}>Loading simulation data...</div>
-        <div style={{ fontSize: '12px', color: '#888' }}>Aug 15 · 9,500 tasks · 6 data centers</div>
+        <div style={{ fontSize: '12px', color: '#888' }}>Aug 15 · 8,000 tasks · 6 data centers</div>
       </div>
     )
   }
