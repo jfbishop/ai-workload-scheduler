@@ -133,6 +133,10 @@ export function scoreTaskPlacement(
   includeSolar = false,
   currentUtilPct = 0,  // 0-100: current GPU utilization % at this DC/hour
 ): ObjectiveScore {
+  // EXTENSION HOOK: BESS-aware routing (not yet implemented).
+  // To bias task placement toward DCs where BESS has stored energy, add:
+  //   bessSchedules?: BESSSchedule[] | null
+  // and pass a bessBonus into totalScore. See README §BESS-aware routing extension.
   const placement = computeTaskPlacementCost(task, dc, grid, scheduledHour, includeSolar)
 
   // Use flex-type-specific weights
@@ -358,17 +362,15 @@ export function rankSolarInvestments(
     const annualCarbonDisplacementKg = annualKwh * avgSolarCarbon / 1000
 
     // Demand response
-    // Battery (2× solar peak capacity) must shed >50% of peak window load to qualify
+    // Any DC with a BESS commits its full discharge capacity as DR.
+    // DR programs (PJM ELRP, CAISO DBD, ERCOT ERS) pay per registered MW regardless of shed %.
     let drEligible = false, drAnnualValueUsd = 0, drShedPct = 0
-    if (econ) {
-      const estimatedLoadKw   = dc.capacity_mw * 1000 * 0.70 * 1.35
-      const batteryCapacityKw = dc.solar_potential_kw_peak * 2
-      drShedPct  = Math.min(100, (batteryCapacityKw / estimatedLoadKw) * 100)
-      drEligible = drShedPct >= 50
-      if (drEligible) {
-        const mwCommitted = batteryCapacityKw / 1000
-        drAnnualValueUsd  = econ.drPaymentPerMwEvent * mwCommitted * econ.drEventsPerYear
-      }
+    if (econ && dc.discharge_rate_kw > 0) {
+      const estimatedLoadKw = dc.capacity_mw * 1000 * 0.70 * 1.35
+      drEligible       = true
+      drShedPct        = Math.round((dc.discharge_rate_kw / estimatedLoadKw) * 100)
+      const mwCommitted = dc.discharge_rate_kw / 1000
+      drAnnualValueUsd  = econ.drPaymentPerMwEvent * mwCommitted * econ.drEventsPerYear
     }
 
     // Coincident peak capacity charge avoidance

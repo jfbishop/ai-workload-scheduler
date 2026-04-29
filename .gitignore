@@ -1,6 +1,9 @@
 # Dependencies
 node_modules/
 
+# TypeScript build cache
+*.tsbuildinfo
+
 # Next.js build output and cache
 .next/
 out/

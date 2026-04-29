@@ -71,7 +71,11 @@
       1.377,
       1.368,
       1.357
-    ]
+    ],
+    "battery_capacity_kwh": 29728,
+    "charge_rate_kw": 7432,
+    "discharge_rate_kw": 7432,
+    "round_trip_efficiency": 0.90
   },
   {
     "id": "dc_plano_tx",
@@ -145,7 +149,11 @@
       1.454,
       1.442,
       1.429
-    ]
+    ],
+    "battery_capacity_kwh": 11148,
+    "charge_rate_kw": 2787,
+    "discharge_rate_kw": 2787,
+    "round_trip_efficiency": 0.90
   },
   {
     "id": "dc_chester_va",
@@ -219,7 +227,11 @@
       1.414,
       1.402,
       1.389
-    ]
+    ],
+    "battery_capacity_kwh": 10405,
+    "charge_rate_kw": 2601,
+    "discharge_rate_kw": 2601,
+    "round_trip_efficiency": 0.90
   },
   {
     "id": "dc_weehawken_nj",
@@ -293,7 +305,11 @@
       1.387,
       1.378,
       1.367
-    ]
+    ],
+    "battery_capacity_kwh": 18580,
+    "charge_rate_kw": 4645,
+    "discharge_rate_kw": 4645,
+    "round_trip_efficiency": 0.90
   },
   {
     "id": "dc_eagle_mountain_ut",
@@ -367,7 +383,11 @@
       1.355,
       1.345,
       1.333
-    ]
+    ],
+    "battery_capacity_kwh": 27870,
+    "charge_rate_kw": 6968,
+    "discharge_rate_kw": 6968,
+    "round_trip_efficiency": 0.90
   },
   {
     "id": "dc_san_jose_ca",
@@ -441,6 +461,10 @@
       1.388,
       1.373,
       1.354
-    ]
+    ],
+    "battery_capacity_kwh": 14864,
+    "charge_rate_kw": 3716,
+    "discharge_rate_kw": 3716,
+    "round_trip_efficiency": 0.90
   }
 ]

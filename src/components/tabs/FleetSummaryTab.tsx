@@ -59,10 +59,25 @@ function KPICard({ val, label, sub, subColor }: {
 // ── Tasks Per DC stacked bar ──────────────────────────────────────────────────
 
 function TasksPerDCChart() {
-  const { dcTotalStats } = useSimulationStore()
+  const { dcTotalStats, results } = useSimulationStore()
   if (!dcTotalStats.length) return null
 
-  const maxJobs = Math.max(1, ...dcTotalStats.map(d => d.total_jobs))
+  // Use max across ALL modes so bars are visually comparable when switching
+  // Without this, Mode 2's spread distribution makes bars look shorter than Mode 1
+  const globalMax = Math.max(1, ...[1, 2, 3].flatMap(mode => {
+    const r = results[mode as 1|2|3]
+    if (!r) return [0]
+    return r.schedule
+      ? Object.values(
+          r.schedule.reduce((acc, t) => {
+            acc[t.assigned_dc_id] = (acc[t.assigned_dc_id] || 0) + 1
+            return acc
+          }, {} as Record<string, number>)
+        )
+      : [0]
+  }))
+
+  const maxJobs = globalMax
 
   return (
     <div>

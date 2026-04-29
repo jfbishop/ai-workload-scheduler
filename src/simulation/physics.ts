@@ -48,6 +48,10 @@ export interface DataCenter {
   utility_id: string
   grid_operator: string
   insolation_peak_sun_hours: number
+  battery_capacity_kwh: number
+  charge_rate_kw: number
+  discharge_rate_kw: number
+  round_trip_efficiency: number
 }
 
 export interface GridProfile {
@@ -239,6 +243,19 @@ export function getDCPue(dc: DataCenter, hour: number): number {
   return getHourlyValue(dc.hourly_pue, hour)
 }
 
+// ── BESS Types ────────────────────────────────────────────────────────────────
+
+export interface BESSHourlyState {
+  soc_kwh: number         // state of charge at start of this hour
+  bess_offset_kw: number  // discharge power offsetting grid draw (0 when charging)
+  charging: boolean       // true = battery is charging this hour
+}
+
+export interface BESSSchedule {
+  dc_id: string
+  hourly: BESSHourlyState[]  // 24 elements, one per simulation hour
+}
+
 // ── Solar Production (Mode 3) ─────────────────────────────────────────────────
 
 /**
@@ -269,13 +286,69 @@ export function computeNetGridDrawKw(grossPowerKw: number, solarKw: number): num
   return Math.max(0, grossPowerKw - solarKw)
 }
 
+// ── BESS Dispatch (Mode 3) ────────────────────────────────────────────────────
+
+/**
+ * Decide battery charge/discharge action for one hour based on LMP vs median.
+ * Cheap hour → charge; expensive hour → discharge.
+ */
+function dispatchBESSHour(
+  lmp: number,
+  lmpMedian: number,
+  soc: number,
+  dc: DataCenter,
+): { newSoc: number; offsetKw: number; charging: boolean } {
+  if (lmp <= lmpMedian) {
+    const headroom = dc.battery_capacity_kwh - soc
+    const charge = Math.min(dc.charge_rate_kw, headroom / dc.round_trip_efficiency)
+    return {
+      newSoc: Math.min(dc.battery_capacity_kwh, soc + charge * dc.round_trip_efficiency),
+      offsetKw: 0,
+      charging: true,
+    }
+  } else {
+    const discharge = Math.min(dc.discharge_rate_kw, soc)
+    return {
+      newSoc: Math.max(0, soc - discharge),
+      offsetKw: discharge,
+      charging: false,
+    }
+  }
+}
+
+/**
+ * Pre-compute 24-hour BESS charge/discharge schedule for one DC.
+ * Call once per Mode 3 simulation run, before the scheduling loop.
+ *
+ * @param dc    Data center with battery parameters
+ * @param grid  Grid profile containing hourly LMP
+ * @returns     24-element hourly BESS schedule
+ */
+export function precomputeBESSSchedule(dc: DataCenter, grid: GridProfile): BESSSchedule {
+  const lmp = grid.lmp_usd_per_mwh
+  const sorted = [...lmp].sort((a, b) => a - b)
+  const lmpMedian = (sorted[11] + sorted[12]) / 2
+
+  let soc = dc.battery_capacity_kwh  // start at 100% SoC
+  const hourly: BESSHourlyState[] = []
+
+  for (let hour = 0; hour < 24; hour++) {
+    const socAtStart = soc
+    const { newSoc, offsetKw, charging } = dispatchBESSHour(lmp[hour], lmpMedian, soc, dc)
+    soc = newSoc
+    hourly.push({ soc_kwh: socAtStart, bess_offset_kw: offsetKw, charging })
+  }
+
+  return { dc_id: dc.id, hourly }
+}
+
 // ── Composite: full cost/carbon for one task at one DC at one hour ────────────
 
 export interface TaskPlacementCost {
   itPowerKw: number
   totalPowerKw: number      // after PUE
   totalEnergyKwh: number    // after PUE
-  netGridEnergyKwh: number  // after solar (Mode 3) or same as totalEnergy (Modes 1/2)
+  netGridEnergyKwh: number  // after solar + BESS offsets (Mode 3) or same as totalEnergy (Modes 1/2)
   costUsd: number
   carbonKg: number
   latencyMs: number
@@ -284,6 +357,7 @@ export interface TaskPlacementCost {
   lmpUsdPerMwh: number
   carbonGCo2PerKwh: number
   solarOffsetKwh: number    // 0 for Modes 1/2
+  bessOffsetKwh: number     // 0 for Modes 1/2
 }
 
 /**
@@ -332,9 +406,10 @@ export function computeTaskPlacementCost(
   const itEnergyKwh    = computeEnergyKwh(itPowerKw, durationHours)
   const totalEnergyKwh = computeTotalEnergyKwh(itEnergyKwh, avgPue)
 
-  const solarOffsetKwh  = includeSolar
+  const solarOffsetKwh   = includeSolar
     ? computeEnergyKwh(Math.min(avgSolarKw, totalPowerKw), durationHours)
     : 0
+  const bessOffsetKwh    = 0  // BESS economics computed post-hoc at DC level in bessRevenue.ts
   const netGridEnergyKwh = Math.max(0, totalEnergyKwh - solarOffsetKwh)
 
   const costUsd  = computeCostUsd(netGridEnergyKwh, avgLmp)
@@ -356,5 +431,6 @@ export function computeTaskPlacementCost(
     lmpUsdPerMwh:     avgLmp,
     carbonGCo2PerKwh: avgCarbon,
     solarOffsetKwh,
+    bessOffsetKwh,
   }
 }
