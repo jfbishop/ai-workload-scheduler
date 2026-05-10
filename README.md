@@ -10,7 +10,7 @@ Built as a final project for a graduate course on AI and the Modern Electricity 
 
 ## What it does
 
-The simulator models a fleet of six data centers across the continental US, each connected to a different grid operator with distinct electricity price and carbon intensity profiles. It schedules 9,500 AI workloads across three modes:
+The simulator models a fleet of six data centers across the continental US, each connected to a different grid operator with distinct electricity price and carbon intensity profiles. It schedules 8,000 AI workloads across three modes:
 
 **Mode 1 — Baseline:** No optimization. Tasks are assigned to the nearest available data center and run immediately as submitted. This is the cost and carbon benchmark.
 
@@ -22,11 +22,12 @@ The simulator models a fleet of six data centers across the continental US, each
 
 ## Key findings
 
-- Grid-aware routing alone (Mode 2) reduces electricity cost by ~64% and carbon emissions by ~41% with no hardware changes
-- Adding rooftop solar and battery storage (Mode 3) achieves a further ~18% cost reduction and ~11% carbon reduction
-- The CAISO duck curve creates strong arbitrage: Flex 2/3 jobs deferred to the 9am–4pm solar window cost as little as $4/MWh vs $162/MWh during the evening ramp
-- Eagle Mountain UT (PacifiCorp grid) ranks #2 for solar investment despite being on the dirtiest grid — high insolation + high carbon displacement makes it the strongest carbon reduction opportunity
-- San Jose CA (CAISO) has a 9.4× storage multiplier — battery storage that time-shifts solar generation to the evening ramp has strong economic justification
+- Grid-aware routing alone (Mode 2) reduces electricity cost by 29.3% and carbon emissions by 2.9% with no hardware changes — purely through intelligent task scheduling and load shifting.
+- Adding rooftop solar and battery storage (Mode 3) achieves an additional ~10% cost and carbon reduction on top of optimized routing, for a total of 55.3% cost and 38.5% carbon reduction vs the unoptimized baseline.
+- 1817 scheduling decisions involved a trade-off between the cheapest and cleanest available grid. In all cases cost was prioritized (weight 0.55 vs 0.30). These conflicts represent moments where a carbon premium could meaningfully change outcomes.
+- 3,688 of 8,000 tasks (46%) were deferred from their submission time to a cheaper/cleaner window. All Flex 1 inference requests were served immediately with zero deferral.
+- Grid economics matters most for BESS value. Eagle Mountain UT and San Jose CA generate the highest net arbitrage despite being mid-sized facilities — battery ROI is determined by the local price spread between cheap and expensive hours, not how much rooftop space a DC has.
+- Capacity markets drive a lot of BESS value. Capacity payments ($5,807/day fleet-wide) nearly match energy arbitrage ($5,889/day) in total value, making PJM and CAISO sites disproportionately attractive — Weehawken NJ outperforms Eagle Mountain UT on net benefit purely because PJM's RPM market compensates for its narrower energy price spread.
 
 ---
 
@@ -34,45 +35,71 @@ The simulator models a fleet of six data centers across the continental US, each
 
 | Location | MW | GPUs | Grid | Notes |
 |---|---|---|---|---|
-| Hammond IL | 80 | 16,000 | PJM ComEd | Largest facility |
-| Eagle Mountain UT | 75 | 15,000 | PacifiCorp PACE | Best insolation, dirty grid |
-| Weehawken NJ | 50 | 10,000 | PJM PSEG | NYC-adjacent, highest LMP |
-| San Jose CA | 40 | 8,000 | CAISO PG&E | Cleanest grid, duck curve |
-| Plano TX | 30 | 6,000 | ERCOT North | Wind-heavy, volatile prices |
-| Chester VA | 28 | 5,600 | PJM Dominion | Richmond area |
+| Hammond IL | 80 | 16,000 | PJM ComEd | Largest facility. Only East Coast DC hosting Opus 70B |
+| Eagle Mountain UT | 75 | 15,000 | PacifiCorp PACE | Best insolation, dirty grid. Full model catalog |
+| Weehawken NJ | 50 | 10,000 | PJM PSEG | NYC-adjacent, highest LMP. No Opus 70B — memory pressure |
+| San Jose CA | 40 | 8,000 | CAISO PG&E | Cleanest grid, duck curve. No Opus 70B |
+| Plano TX | 30 | 6,000 | ERCOT North | Wind-heavy, volatile prices. Flash + Sonnet only |
+| Chester VA | 28 | 5,600 | PJM Dominion | Richmond area. Flash + Sonnet only |
+
+---
+
+## Model placement
+
+A key assumption in most grid-aware scheduling research is that GPU compute is fungible — any task can run on any available GPU. This simulation relaxes that assumption by introducing a static model placement layer.
+
+Four inference models are defined with different memory footprints:
+
+| Model | Size | GPU memory | Traffic share | Hosted at |
+|---|---|---|---|---|
+| Flash 7B | 7B params | 14 GB/replica | 48% | All 6 DCs |
+| Sonnet 35B | 35B params | 70 GB/replica | 32% | All 6 DCs |
+| Opus 70B | 70B params | 140 GB/replica | 12% | Hammond IL, Eagle Mountain UT only |
+| Vision 13B | 13B params | 26 GB/replica | 8% | Weehawken NJ, Eagle Mountain UT, San Jose CA |
+
+Opus 70B requires 140GB of GPU memory per replica — too large to host at smaller facilities without crowding out inference capacity for the high-volume Flash and Sonnet traffic. As a result, East Coast users requesting Opus 70B must route to Hammond IL (avg ~1,200km) rather than the geographically closer Weehawken NJ (17km from Midtown Manhattan). This illustrates a fundamental constraint in AI infrastructure: routing decisions are bounded not just by grid economics but by where model weights physically reside.
 
 ---
 
 ## Workload taxonomy
 
-Tasks are bucketed into three flex types based on EmeraldAI's scheduling methodology:
+Tasks are bucketed into three flex types based on scheduling flexibility. The taxonomy is adapted from Google's carbon-aware computing framework (Wu et al., 2022):
 
 | Type | Category | Examples | Deferral window |
 |---|---|---|---|
-| Flex 1 | Hard real-time | Live inference, API requests | None — routed to nearest DC immediately |
+| Flex 1 | Hard real-time | Live inference, API requests | None — routed immediately |
 | Flex 2 | Soft real-time | Batch inference, model training, fine-tuning | Up to 4 hours |
 | Flex 3 | Background | Model retraining, data pipelines, eval sweeps | Up to 24 hours |
 
-The simulation includes a 1,500-task backlog from August 14 representing Flex 2/3 work carried over to run during August 15's overnight low-demand, low-cost window.
+Each Flex 1 task is assigned a model ID drawn from the traffic distribution above. The scheduler routes it to the nearest data center that both hosts the required model and has available GPU capacity — not simply the nearest DC. Flex 2 and Flex 3 tasks are model-agnostic (training and pipeline jobs are not model-specific) and are routed purely by the objective function.
 
 ---
 
 ## Objective function
 
-For Flex 2 and Flex 3 tasks, each (data center, hour) candidate is scored:
+**Flex 1 — inference routing:**
+
+Flex 1 tasks bypass the objective function entirely. They are hard-routed to the nearest data center that hosts the required model with available GPU capacity at the submission hour. Latency is non-negotiable for live inference, and model placement further constrains the feasible DC set.
+
+**Flex 2 and Flex 3 — optimized routing:**
+
+Each (data center, hour) candidate is scored:
 
 ```
 Score = 0.55 × NormalizedLMP
       + 0.30 × NormalizedCarbon
+      + 0.10 × NormalizedLatency
       + 0.15 × DeferralUrgency
-      + UtilizationPenalty(quadratic, kicks in at 30% capacity)
+      + UtilizationPenalty(quadratic, kicks in at 40% capacity)
 ```
 
-Flex 1 tasks bypass the objective function entirely and are hard-routed to the nearest data center with available GPU capacity. Latency is non-negotiable for live inference.
+Grid conditions (LMP and carbon intensity) are averaged across the full task runtime — a task starting at noon that runs for 8 hours is scored on average conditions from 12pm to 8pm, not just the start hour. This prevents the scheduler from greedily picking a cheap start hour that runs into an expensive evening peak.
+
+The deferral penalty uses a convex (square root) curve so that even short deferrals carry meaningful cost. This prevents the scheduler from deferring everything to the cheapest window — only tasks with a genuinely large grid improvement justify significant deferral.
 
 When the cheapest available DC is not the cleanest, cost takes priority and a **conflict flag** is raised. These conflicts are visible throughout the dashboard and represent moments where a carbon price signal or tighter carbon constraint would change the routing decision.
 
-Grid conditions (LMP and carbon intensity) are averaged across the full task runtime — a task starting at noon that runs for 8 hours is scored on the average conditions from 12pm to 8pm, not just the start hour. This prevents the scheduler from greedily picking a cheap start hour that runs into an expensive evening peak.
+Of the 8,000 tasks simulated on Aug 15, approximately 3,688 Flex 2/3 tasks are shifted to cheaper same-day windows. All deferred tasks complete within their deadline — deferral means a later start time on the same day, not carry-over to the following day.
 
 ---
 
@@ -324,4 +351,18 @@ Make sure `results/` is **not** in your `.gitignore` so the JSON files are commi
 
 ## Authors
 
-Graduate course project — AI and the Modern Electricity Grid
+**Juliet Bishop** MA, Quantitative Methods in the Social Sciences  
+Columbia University Graduate School of Arts and Sciences
+GitHub: [@jfbishop](https://github.com/jfbishop)
+
+**Lorraine Wang** MPA, Climate, Energy and Environment
+Columbia Univeristy School of International Public Affairs
+GitHub: [@LorrianeWang](https://github.com/LorrianeWang)
+
+**Shuxuan Song** MS, Sustainability Management
+Columbia University School of Professional Studies
+GitHub: [@NoraSong7619](https://github.com/NoraSong7619)
+
+**Jing (Juno) Chen** MA, Climate and Society
+Columbia University Climate School
+GitHub: [@JunoJingChen](https://github.com/JunoJingChen)
