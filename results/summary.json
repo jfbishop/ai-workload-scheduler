@@ -1,40 +1,40 @@
 {
-  "generated_at": "2026-04-29T20:41:14.200Z",
+  "generated_at": "2026-05-08T15:33:18.959Z",
   "simulation_date": "2024-08-15",
-  "task_count": 9500,
+  "task_count": 8000,
   "modes": {
     "mode1_baseline": {
-      "total_cost_usd": 284129.4999068818,
-      "total_carbon_kg": 909477.8809384388,
-      "total_energy_kwh": 2800732.2431260156,
-      "tasks_scheduled": 8000,
+      "total_cost_usd": 465099.7853570989,
+      "total_carbon_kg": 1905705.8408138982,
+      "total_energy_kwh": 5649470.2640770255,
+      "tasks_scheduled": 7998,
       "tasks_deferred": 0,
-      "tasks_dropped": 0,
+      "tasks_dropped": 2,
       "conflict_count": 0
     },
     "mode2_optimized": {
-      "total_cost_usd": 158015.90744334736,
-      "total_carbon_kg": 885512.1064717248,
-      "total_energy_kwh": 2818972.9994011824,
+      "total_cost_usd": 328699.143623275,
+      "total_carbon_kg": 1850432.6633856504,
+      "total_energy_kwh": 5679665.019389122,
       "tasks_scheduled": 8000,
-      "tasks_deferred": 2828,
+      "tasks_deferred": 3688,
       "tasks_dropped": 0,
-      "conflict_count": 1427,
+      "conflict_count": 1817,
       "vs_baseline": {
-        "cost_delta_usd": -126113.59246353447,
-        "cost_pct_change": "-44.4%",
-        "carbon_delta_kg": -23965.774466714007,
-        "carbon_pct_change": "-2.6%"
+        "cost_delta_usd": -136400.64173382393,
+        "cost_pct_change": "-29.3%",
+        "carbon_delta_kg": -55273.17742824787,
+        "carbon_pct_change": "-2.9%"
       }
     },
     "mode3_solar": {
-      "total_cost_usd": 112716.52210844922,
-      "total_carbon_kg": 698107.830691517,
-      "total_energy_kwh": 2035429.8163111475,
+      "total_cost_usd": 207670.9463618053,
+      "total_carbon_kg": 1171427.7735802794,
+      "total_energy_kwh": 3521720.858955338,
       "tasks_scheduled": 8000,
-      "tasks_deferred": 2828,
+      "tasks_deferred": 3688,
       "tasks_dropped": 0,
-      "conflict_count": 1427,
+      "conflict_count": 1817,
       "solar_rankings": [
         {
           "dcId": "dc_hammond_il",
@@ -128,16 +128,16 @@
         }
       ],
       "vs_baseline": {
-        "cost_delta_usd": -171412.9777984326,
-        "cost_pct_change": "-60.3%",
-        "carbon_delta_kg": -211370.05024692183,
-        "carbon_pct_change": "-23.2%"
+        "cost_delta_usd": -257428.8389952936,
+        "cost_pct_change": "-55.3%",
+        "carbon_delta_kg": -734278.0672336188,
+        "carbon_pct_change": "-38.5%"
       },
       "vs_mode2": {
-        "cost_delta_usd": -45299.385334898136,
-        "cost_pct_change": "-28.7%",
-        "carbon_delta_kg": -187404.27578020783,
-        "carbon_pct_change": "-21.2%"
+        "cost_delta_usd": -121028.19726146967,
+        "cost_pct_change": "-36.8%",
+        "carbon_delta_kg": -679004.8898053709,
+        "carbon_pct_change": "-36.7%"
       }
     }
   }

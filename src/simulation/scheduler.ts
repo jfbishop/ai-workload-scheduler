@@ -295,6 +295,10 @@ function scheduleOptimized(
     ? dcs.map(dc => precomputeBESSSchedule(dc, grids.get(dc.utility_id)!))
     : null
 
+  const bessScheduleMap: Map<string, BESSSchedule> | undefined = bessSchedules
+    ? new Map(bessSchedules.map(b => [b.dc_id, b]))
+    : undefined
+
   // Process live Aug 15 tasks only — no backlog.
   // All three modes now compare apples-to-apples on the same 8,000 live tasks.
   const liveTasks = tasks.filter(t => !t.is_backlog)
@@ -347,7 +351,7 @@ function scheduleOptimized(
       }
       const grid = grids.get(nearestDc.utility_id)!
       occupyCapacity(cap, nearestDc.id, submitHour, task.duration_hours, task.gpu_count)
-      const p = computeTaskPlacementCost(task, nearestDc, grid, submitHour, includeSolar)
+      const p = computeTaskPlacementCost(task, nearestDc, grid, submitHour, includeSolar, bessScheduleMap?.get(nearestDc.id))
       schedule.push(buildScheduledTask(task, nearestDc, submitHour, {
         itPowerKw:        p.itPowerKw,
         totalPowerKw:     p.totalPowerKw,
@@ -366,7 +370,7 @@ function scheduleOptimized(
       continue
     }
 
-    const best: BestPlacement | null = findBestPlacement(task, feasibleDcs, grids, includeSolar, cap)
+    const best: BestPlacement | null = findBestPlacement(task, feasibleDcs, grids, includeSolar, cap, bessScheduleMap)
 
     if (!best) {
       dropped.push(task.request_id)
@@ -382,7 +386,7 @@ function scheduleOptimized(
         task,
         feasibleDcs.filter(dc => dc.id !== assignedDc.id ||
           hasCapacity(cap, dc, best.scheduledHour, task.duration_hours, task.gpu_count)),
-        grids, includeSolar, cap
+        grids, includeSolar, cap, bessScheduleMap
       )
       if (!fallback) { dropped.push(task.request_id); continue }
       const fbDc = dcs.find(dc => dc.id === fallback.dcId)!

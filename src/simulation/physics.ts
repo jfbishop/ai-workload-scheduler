@@ -377,6 +377,7 @@ export function computeTaskPlacementCost(
   grid: GridProfile,
   scheduledHour: number,
   includeSolar = false,
+  bessSchedule?: BESSSchedule,
 ): TaskPlacementCost {
   // Average grid conditions across the full task runtime.
   // A task starting at hour 12 with 8hr duration runs through hour 19,
@@ -406,11 +407,24 @@ export function computeTaskPlacementCost(
   const itEnergyKwh    = computeEnergyKwh(itPowerKw, durationHours)
   const totalEnergyKwh = computeTotalEnergyKwh(itEnergyKwh, avgPue)
 
-  const solarOffsetKwh   = includeSolar
+  const solarOffsetKwh = includeSolar
     ? computeEnergyKwh(Math.min(avgSolarKw, totalPowerKw), durationHours)
     : 0
-  const bessOffsetKwh    = 0  // BESS economics computed post-hoc at DC level in bessRevenue.ts
-  const netGridEnergyKwh = Math.max(0, totalEnergyKwh - solarOffsetKwh)
+
+  // BESS offset: scale DC-level discharge by this task's share of DC GPU capacity.
+  // Only discharge hours count (charging hours contribute 0).
+  // Capped at task's total energy — can't offset more than consumed.
+  let bessOffsetKwh = 0
+  if (bessSchedule) {
+    const avgBessKw = runtimeHours.reduce((s, h) => {
+      const state = bessSchedule.hourly[Math.min(23, h)]
+      return s + (state.charging ? 0 : state.bess_offset_kw)
+    }, 0) / runtimeHours.length
+    const taskDcRatio = dc.gpu_count > 0 ? Math.min(1, task.gpu_count / dc.gpu_count) : 0
+    bessOffsetKwh = Math.min(totalEnergyKwh, avgBessKw * taskDcRatio * durationHours)
+  }
+
+  const netGridEnergyKwh = Math.max(0, totalEnergyKwh - solarOffsetKwh - bessOffsetKwh)
 
   const costUsd  = computeCostUsd(netGridEnergyKwh, avgLmp)
   const carbonKg = computeCarbonKg(netGridEnergyKwh, avgCarbon)

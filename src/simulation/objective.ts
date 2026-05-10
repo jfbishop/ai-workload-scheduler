@@ -16,7 +16,7 @@
  * and a conflict flag is raised for dashboard display.
  */
 
-import type { Task, DataCenter, GridProfile, TaskPlacementCost } from './physics'
+import type { Task, DataCenter, GridProfile, TaskPlacementCost, BESSSchedule } from './physics'
 import { computeTaskPlacementCost, computeDistanceKm, computeLatencyMs, computeSolarOutputKw } from './physics'
 
 // ── Objective Weights ─────────────────────────────────────────────────────────
@@ -131,13 +131,10 @@ export function scoreTaskPlacement(
   grid: GridProfile,
   scheduledHour: number,
   includeSolar = false,
-  currentUtilPct = 0,  // 0-100: current GPU utilization % at this DC/hour
+  currentUtilPct = 0,
+  bessSchedule?: BESSSchedule,
 ): ObjectiveScore {
-  // EXTENSION HOOK: BESS-aware routing (not yet implemented).
-  // To bias task placement toward DCs where BESS has stored energy, add:
-  //   bessSchedules?: BESSSchedule[] | null
-  // and pass a bessBonus into totalScore. See README §BESS-aware routing extension.
-  const placement = computeTaskPlacementCost(task, dc, grid, scheduledHour, includeSolar)
+  const placement = computeTaskPlacementCost(task, dc, grid, scheduledHour, includeSolar, bessSchedule)
 
   // Use flex-type-specific weights
   const W = task.flex_type === 1 ? WEIGHTS_FLEX1 : WEIGHTS_FLEX23
@@ -238,8 +235,8 @@ export function findBestPlacement(
   dcs: DataCenter[],
   grids: Map<string, GridProfile>,
   includeSolar = false,
-  // capacity[dcId][hour] = GPUs currently committed — used for utilization penalty
   capacity?: Record<string, number[]>,
+  bessScheduleMap?: Map<string, BESSSchedule>,
 ): BestPlacement | null {
   const submitHour = task.submit_minute_frac
   const maxHour    = Math.min(23, Math.floor(submitHour + task.deadline_hours))
@@ -265,7 +262,8 @@ export function findBestPlacement(
       const gpusUsed    = capacity?.[dc.id]?.[hour] ?? 0
       const utilPct     = dc.gpu_count > 0 ? (gpusUsed / dc.gpu_count) * 100 : 0
 
-      const score = scoreTaskPlacement(task, dc, grid, hour, includeSolar, utilPct)
+      const bessSchedule = bessScheduleMap?.get(dc.id)
+      const score = scoreTaskPlacement(task, dc, grid, hour, includeSolar, utilPct, bessSchedule)
 
       candidateScores.push({
         dcId:   dc.id,
