@@ -352,17 +352,17 @@ Make sure `results/` is **not** in your `.gitignore` so the JSON files are commi
 ## Authors
 
 **Juliet Bishop** MA, Quantitative Methods in the Social Sciences  
-Columbia University Graduate School of Arts and Sciences
+Columbia University Graduate School of Arts and Sciences  
 GitHub: [@jfbishop](https://github.com/jfbishop)
 
-**Lorraine Wang** MPA, Climate, Energy and Environment
-Columbia Univeristy School of International Public Affairs
+**Lorraine Wang** MPA, Climate, Energy and Environment  
+Columbia Univeristy School of International Public Affairs  
 GitHub: [@LorrianeWang](https://github.com/LorrianeWang)
 
-**Shuxuan Song** MS, Sustainability Management
-Columbia University School of Professional Studies
+**Shuxuan Song** MS, Sustainability Management  
+Columbia University School of Professional Studies  
 GitHub: [@NoraSong7619](https://github.com/NoraSong7619)
 
-**Jing (Juno) Chen** MA, Climate and Society
-Columbia University Climate School
+**Jing (Juno) Chen** MA, Climate and Society  
+Columbia University Climate School  
 GitHub: [@JunoJingChen](https://github.com/JunoJingChen)
